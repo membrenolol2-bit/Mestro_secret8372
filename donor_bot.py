@@ -265,59 +265,132 @@ if __name__ == "__main__":
     print("[DONOR BOT] Starting...")
     client.run(BOT_TOKEN)
 
-# ── DONATION DASHBOARD & COMMUNITY INPUT PIPELINE ─────────────────────────────
+# ── UNIVERSAL LOGGING AND DONATION DASHBOARD PIPELINE ─────────────────────────
+import discord
+from discord.ui import Modal, TextInput, View, Button
+import os
+import json
+
+async def send_to_log_channel(client, title, description, color=discord.Color.blue()):
+    """Broadcasts a real-time status update embed directly into the private server logging channel."""
+    try:
+        log_channel_id = os.getenv("DISCORD_LOG_CHANNEL_ID")
+        if not log_channel_id:
+            return
+            
+        channel = client.get_channel(int(log_channel_id))
+        if channel:
+            embed = discord.Embed(title=title, description=description, color=color)
+            embed.set_footer(text="Mestro Tokens System Monitor")
+            await channel.send(embed=embed)
+    except Exception as e:
+        print(f"[LOG_ERROR] Could not broadcast system alert: {e}")
+
+def append_universal_token(token_data_str, pool_type="normal"):
+    """Appends raw text token entries straight into the local database JSON storage stock file."""
+    filename = "heroic_stock.json" if pool_type == "heroic" else "normal_stock.json"
+    stock = []
+    try:
+        if os.path.exists(filename):
+            with open(filename, "r") as f:
+                stock = json.load(f)
+    except Exception:
+        stock = []
+        
+    stock.append({
+        "input_data": token_data_str.strip(),
+        "_source_type": "user_donated"
+    })
+    
+    with open(filename, "w") as f:
+        json.dump(stock, f, indent=2)
+
+# ── 1. SINGLE TOKEN DONATION POPUP ───────────────────────────────────────────
 class SingleTokenModal(Modal, title="Donate a Token"):
     token_input = TextInput(
-        label="Paste Nakama Access Token", 
-        style=discord.TextStyle.long, 
-        placeholder="eyJhbGciOiJIUzI1Ni...",
+        label="Paste Access Token / Session Key",
+        style=discord.TextStyle.long,
+        placeholder="Paste your token string here...",
         required=True
     )
-    refresh_input = TextInput(
-        label="Paste Refresh Token (Optional)", 
-        placeholder="Enter backup refresh string here...",
-        required=False
-    )
+
+    def __init__(self, client):
+        super().__init__()
+        self.client = client
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        raw_token = self.token_input.value.strip()
+        raw_data = self.token_input.value.strip()
         
-        # 1. Security Check: Validate token viability before updating databases
-        result = await validate_and_analyze_nakama_token(raw_token)
-        if not result["valid"]:
-            await interaction.followup.send(
-                "❌ Sorry, could not donate the token. The token is expired, invalid, or returned a connection error. Please try another token.", 
-                ephemeral=True
-            )
-            return
+        append_universal_token(raw_data, pool_type="normal")
+        await interaction.followup.send("🎉 **Success!** Your token donation has been safely added to the pool!", ephemeral=True)
         
-        # 2. OVERRIDE GATE: Authenticate using the USER Bearer Token to change name securely
-        try:
-            primary_host = os.getenv("NAKAMA_HOST", "https://nakamacloud.io")
-            
-            # The player's token acts as their own Authorization key
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {raw_token}" # CRITICAL FIX: Replaces basic master auth with session key
-            }
-            
-            # Push the hardcoded avatar name string directly to the main Nakama account registry
-            account_url = f"{primary_host.rstrip('/')}/v2/account"
-            async with aiohttp.ClientSession() as session:
-                await session.put(account_url, headers=headers, json={"display_name": "CLICKS TOKENS"}, timeout=10)
-        except Exception as err:
-            print(f"[DONATION] Warning: Failed to force profile identity override: {err}")
-            
-        # 3. Database Insertion: Add the validated token directly to your live json stock file
-        append_donated_token_to_stock(raw_token, self.refresh_input.value)
-        await interaction.followup.send("🎉 Token added! In-game profile identification successfully forced to 'CLICKS TOKENS'.", ephemeral=True)
+        await send_to_log_channel(
+            self.client, 
+            "🎁 Single Token Received", 
+            f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target:** Normal Stock Pool\n\n*Raw input data has been appended into normal_stock.json.*",
+            color=discord.Color.green()
+        )
 
-class DonateDashboardView(View):
-    def __init__(self): 
-        super().__init__(timeout=None)
+# ── 2. MULTIPLE TOKENS DONATION POPUP ────────────────────────────────────────
+class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
+    tokens_input = TextInput(
+        label="Paste Multiple Tokens Below",
+        style=discord.TextStyle.paragraph,
+        placeholder="Label them clearly, for example:\ntoken 1: [paste first token]\ntoken 2: [paste second token]",
+        required=True
+    )
+
+    def __init__(self, client):
+        super().__init__()
+        self.client = client
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        raw_data = self.tokens_input.value.strip()
         
-    @discord.ui.button(label="Donate a Token", style=discord.ButtonStyle.success, custom_id="donate_single_btn")
-    async def donate_single(self, interaction: discord.Interaction, button: Button):
-        # Automatically trigger and open the input popup screen layout
-        await interaction.response.send_modal(SingleTokenModal())
+        append_universal_token(raw_data, pool_type="normal")
+        await interaction.followup.send("🎉 **Success!** Your multiple token submissions have been saved directly!", ephemeral=True)
+        
+        await send_to_log_channel(
+            self.client, 
+            "📦 Bulk Tokens Received", 
+            f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target:** Normal Stock Pool\n\n*The multi-line input text block has been recorded directly into normal_stock.json.*",
+            color=discord.Color.purple()
+        )
+
+# ── 3. BUTTON INTERFACE LAYOUT VIEW PANEL ────────────────────────────────────
+class MestroDonationDashboardView(View):
+    def __init__(self, client):
+        super().__init__(timeout=None)
+        self.client = client
+        
+    @discord.ui.button(label="Donate a Token", style=discord.ButtonStyle.success, custom_id="donate_single_universal")
+    async def donate_single_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(SingleTokenModal(self.client))
+        
+    @discord.ui.button(label="Donate Multiple Tokens", style=discord.ButtonStyle.primary, custom_id="donate_multiple_universal")
+    async def donate_multiple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(MultipleTokensModal(self.client))
+
+# ── 4. SLASH COMMAND & SYSTEM REBOOT ROUTER ──────────────────────────────────
+def setup_donation_dashboard(tree):
+    # Sends a log broadcast automatically whenever the bot performs a boot setup update
+    @tree.client.event
+    async def on_ready():
+        print(f"[BOT] Unified system connected as {tree.client.user}")
+        await send_to_log_channel(
+            tree.client, 
+            "🚀 Bot System Online", 
+            "**Mestro Tokens Dashboard** has successfully initialized.\nAll active dashboard interaction layers and button listeners are online.",
+            color=discord.Color.gold()
+        )
+
+    @tree.command(name="donate_dashboard", description="Launch the customized Mestro Tokens donation command menu panel")
+    async def donate_dashboard(interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="🎁 Mestro Tokens Donation Center", 
+            description="Click the button panels below to support active system pool stock rotations!\n\n> To submit multiple tokens at once, click **Donate Multiple Tokens** and group your lines clearly using numbers like `token 1:`, `token 2:`, etc.", 
+            color=discord.Color.blue()
+        )
+        await interaction.response.send_message(embed=embed, view=MestroDonationDashboardView(tree.client))
