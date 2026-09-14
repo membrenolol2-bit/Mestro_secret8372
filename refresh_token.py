@@ -11,7 +11,7 @@ Variables en Railway:
 
     NAKAMA_HOST               ← opcional
     NAKAMA_SERVER_KEY         ← opcional
-    REFRESH_INTERVAL_SECONDS  ← opcional (default 40)
+    REFRESH_INTERVAL_SECONDS  ← opcional (default 15)
 
 Usage:
     python refresh_token.py          → refresh once
@@ -133,7 +133,7 @@ def refresh_all_env_accounts(accounts: list[dict]) -> dict | None:
 def get_active_account(accounts: list[dict]) -> dict | None:
     """Return the first account whose refresh_token is still valid."""
     for acc in accounts:
-        if not is_expired(acc["refresh_token"], buffer=60):
+        if not is_expired(acc["refresh_token"], buffer=15):
             return acc
     return None
 
