@@ -21,7 +21,7 @@ Commands:
 import json
 import os
 import sys
-import asncio
+import asyncio 
 import traceback
 import diswcord
 from discord import app_commands
