@@ -1011,3 +1011,136 @@ if __name__ == "__main__":
     print("[BOT] Starting unified bot...")
     print("💡 Tip: Use main.py for token input")
     client.run(BOT_TOKEN)
+# ── 1. LIVE SERVICE LOGGER PIPELINE ──────────────────────────────────────────
+async def send_to_log_channel(client, title, description, color=discord.Color.blue()):
+    """Broadcasts a status update embed directly into your private log channel room."""
+    try:
+        log_channel_id = os.getenv("DISCORD_LOG_CHANNEL_ID")
+        if not log_channel_id:
+            return
+            
+        channel = client.get_channel(int(log_channel_id))
+        if channel:
+            embed = discord.Embed(title=title, description=description, color=color)
+            embed.set_footer(text="Mestro Tokens Live Monitor")
+            await channel.send(embed=embed)
+    except Exception as e:
+        print(f"[LOG_ERROR] Could not broadcast system alert: {e}")
+
+# ── 2. DYNAMIC FILE DATABASE ENGINE ──────────────────────────────────────────
+def append_universal_token(token_data_str, pool_type="normal"):
+    """Appends raw text entries straight into your local stock configuration sheets."""
+    filename = "heroic_stock.json" if pool_type == "heroic" else "normal_stock.json"
+    stock = []
+    try:
+        if os.path.exists(filename):
+            with open(filename, "r") as f:
+                stock = json.load(f)
+    except Exception:
+        stock = []
+        
+    stock.append({
+        "input_data": token_data_str.strip(),
+        "_source_type": "user_donated"
+    })
+    
+    with open(filename, "w") as f:
+        json.dump(stock, f, indent=2)
+
+# ── 3. SINGLE TOKEN DONATION MODAL POPUP ─────────────────────────────────────
+class SingleTokenModal(Modal, title="Donate a Token"):
+    token_input = TextInput(
+        label="Paste Access Token / Session Key",
+        style=discord.TextStyle.long,
+        placeholder="Paste your token string here...",
+        required=True
+    )
+
+    def __init__(self, client):
+        super().__init__()
+        self.client = client
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        raw_data = self.token_input.value.strip()
+        
+        append_universal_token(raw_data, pool_type="normal")
+        await interaction.followup.send("🎉 **Success!** Your token donation has been safely added to the pool!", ephemeral=True)
+        
+        await send_to_log_channel(
+            self.client, 
+            "🎁 Single Token Received", 
+            f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target Database:** `normal_stock.json`",
+            color=discord.Color.green()
+        )
+
+# ── 4. MULTIPLE TOKENS DONATION MODAL POPUP ──────────────────────────────────
+class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
+    tokens_input = TextInput(
+        label="Paste Multiple Tokens Below",
+        style=discord.TextStyle.paragraph,
+        placeholder="Label them clearly by number, for example:\ntoken 1: [paste first token]\ntoken 2: [paste second token]",
+        required=True
+    )
+
+    def __init__(self, client):
+        super().__init__()
+        self.client = client
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        raw_data = self.tokens_input.value.strip()
+        
+        append_universal_token(raw_data, pool_type="normal")
+        await interaction.followup.send("🎉 **Success!** Your multiple token submissions have been saved directly!", ephemeral=True)
+        
+        await send_to_log_channel(
+            self.client, 
+            "📦 Bulk Tokens Received", 
+            f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target Database:** `normal_stock.json`\n\n*Multi-line text block has been recorded.*",
+            color=discord.Color.purple()
+        )
+
+# ── 5. DASHBOARD VIEW INTERFACE LAYER ────────────────────────────────────────
+class MestroDonationDashboardView(View):
+    def __init__(self, client):
+        super().__init__(timeout=None)
+        self.client = client
+        
+    @discord.ui.button(label="Donate a Token", style=discord.ButtonStyle.success, custom_id="donate_single_universal")
+    async def donate_single_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(SingleTokenModal(self.client))
+        
+    @discord.ui.button(label="Donate Multiple Tokens", style=discord.ButtonStyle.primary, custom_id="donate_multiple_universal")
+    async def donate_multiple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(MultipleTokensModal(self.client))
+
+# ── 6. COMMAND INTEGRATION SETUP GATEWAY ─────────────────────────────────────
+def setup_donation_dashboard(tree):
+    # Logs a message into your channel automatically whenever the app completes a boot update
+    @tree.client.event
+    async def on_ready():
+        print(f"[BOT] Connected as {tree.client.user}")
+        
+        # Syncs commands globally so they appear instantly inside chat UI drop menus
+        try:
+            await tree.sync()
+            print("[SYNC] Global slash commands synchronized cleanly.")
+        except Exception as e:
+            print(f"[SYNC_ERROR] Could not sync commands: {e}")
+
+        await send_to_log_channel(
+            tree.client, 
+            "🚀 Bot System Online", 
+            "**Mestro Tokens Dashboard** has successfully initialized.\nAll slash commands are synced, and button interactions are **Active**.",
+            color=discord.Color.gold()
+        )
+
+    @tree.command(name="donate_dashboard", description="Launch the customized Mestro Tokens donation menu panel")
+    async def donate_dashboard(interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="🎁 Mestro Tokens Donation Center", 
+            description="Click the button panels below to support active system pool stock rotations!\n\n> To submit multiple tokens at once, click **Donate Multiple Tokens** and group your lines clearly using numbers like `token 1:`, `token 2:`, etc.", 
+            color=discord.Color.blue()
+        )
+        await interaction.response.send_message(embed=embed, view=MestroDonationDashboardView(tree.client))
