@@ -1009,7 +1009,7 @@ async def on_resumed():
 # This file can also be run directly if DISCORD_BOT_TOKEN is set
 if __name__ == "__main__":
     # Hooks our custom donation system panel straight onto your main command structure
-    setup_donation_dashboard(tree)
+    def setup_donation_dashboard(tree):
     
     # Boots the bot online (Make sure this variable matches your exact token name)
     print("[BOT] Launching connection gateway layers...")
