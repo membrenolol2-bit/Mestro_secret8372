@@ -247,7 +247,7 @@ async def token_cmd(interaction: discord.Interaction):
             "token": tokens["token"],
             "refresh_token": tokens["refresh_token"],
             "expires_in": ttl,
-            "_note": "Made by Forest and Mestro_ac",
+            "_note": "Made by Mestro_ac",
         }
 
         account_num = tokens.get("account")
