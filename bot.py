@@ -1072,7 +1072,7 @@ class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
     tokens_input = TextInput(
         label="Paste Multiple Tokens Below",
         style=discord.TextStyle.paragraph,
-        placeholder="Label them clearly by number, for example:\ntoken 1: [paste first token]\ntoken 2: [paste second token]",
+        placeholder="token 1: [paste first token]\ntoken 2: [paste second token]", # <-- SHORTENED PERFECTLY!
         required=True
     )
 
