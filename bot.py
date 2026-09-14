@@ -1011,9 +1011,15 @@ if __name__ == "__main__":
     print("[BOT] Starting unified bot...")
     print("💡 Tip: Use main.py for token input")
     client.run(BOT_TOKEN)
-# ── 1. LIVE SERVICE LOGGER PIPELINE ──────────────────────────────────────────
+# ── MESTRO TOKENS: LOGGING AND DONATION DASHBOARD END-OF-FILE ROUTER ─────────
+import discord
+from discord import app_commands
+from discord.ui import Modal, TextInput, View, Button
+import os
+import json
+
 async def send_to_log_channel(client, title, description, color=discord.Color.blue()):
-    """Broadcasts a status update embed directly into your private log channel room."""
+    """Broadcasts a dynamic system event notification directly into your private log channel."""
     try:
         log_channel_id = os.getenv("DISCORD_LOG_CHANNEL_ID")
         if not log_channel_id:
@@ -1025,11 +1031,10 @@ async def send_to_log_channel(client, title, description, color=discord.Color.bl
             embed.set_footer(text="Mestro Tokens Live Monitor")
             await channel.send(embed=embed)
     except Exception as e:
-        print(f"[LOG_ERROR] Could not broadcast system alert: {e}")
+        print(f"[LOG_ERROR] Could not broadcast system alert embed: {e}")
 
-# ── 2. DYNAMIC FILE DATABASE ENGINE ──────────────────────────────────────────
 def append_universal_token(token_data_str, pool_type="normal"):
-    """Appends raw text entries straight into your local stock configuration sheets."""
+    """Appends raw text token blocks directly into the local database JSON storage stock sheets."""
     filename = "heroic_stock.json" if pool_type == "heroic" else "normal_stock.json"
     stock = []
     try:
@@ -1047,7 +1052,7 @@ def append_universal_token(token_data_str, pool_type="normal"):
     with open(filename, "w") as f:
         json.dump(stock, f, indent=2)
 
-# ── 3. SINGLE TOKEN DONATION MODAL POPUP ─────────────────────────────────────
+# ── 1. SINGLE TOKEN INPUT WINDOW ─────────────────────────────────────────────
 class SingleTokenModal(Modal, title="Donate a Token"):
     token_input = TextInput(
         label="Paste Access Token / Session Key",
@@ -1074,7 +1079,7 @@ class SingleTokenModal(Modal, title="Donate a Token"):
             color=discord.Color.green()
         )
 
-# ── 4. MULTIPLE TOKENS DONATION MODAL POPUP ──────────────────────────────────
+# ── 2. MULTIPLE LABELED TOKENS INPUT WINDOW ──────────────────────────────────
 class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
     tokens_input = TextInput(
         label="Paste Multiple Tokens Below",
@@ -1101,7 +1106,7 @@ class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
             color=discord.Color.purple()
         )
 
-# ── 5. DASHBOARD VIEW INTERFACE LAYER ────────────────────────────────────────
+# ── 3. BUTTONS DASHBOARD PRESENTS ───────────────────────────────────────────
 class MestroDonationDashboardView(View):
     def __init__(self, client):
         super().__init__(timeout=None)
@@ -1115,27 +1120,29 @@ class MestroDonationDashboardView(View):
     async def donate_multiple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(MultipleTokensModal(self.client))
 
-# ── 6. COMMAND INTEGRATION SETUP GATEWAY ─────────────────────────────────────
+# ── 4. BACKEND INTEGRATION GATEWAY ROUTER ───────────────────────────────────
 def setup_donation_dashboard(tree):
-    # Logs a message into your channel automatically whenever the app completes a boot update
+    """Hooks the /donate_dashboard command structure safely onto your main client tree hierarchy."""
+    
     @tree.client.event
     async def on_ready():
         print(f"[BOT] Connected as {tree.client.user}")
         
-        # Syncs commands globally so they appear instantly inside chat UI drop menus
+        # Globally registers slash commands to Discord servers on boot initialization
         try:
             await tree.sync()
-            print("[SYNC] Global slash commands synchronized cleanly.")
+            print("[SYNC] Global application commands synchronized successfully.")
         except Exception as e:
-            print(f"[SYNC_ERROR] Could not sync commands: {e}")
+            print(f"[SYNC_ERROR] Command sync failed: {e}")
 
         await send_to_log_channel(
             tree.client, 
             "🚀 Bot System Online", 
-            "**Mestro Tokens Dashboard** has successfully initialized.\nAll slash commands are synced, and button interactions are **Active**.",
+            "**Mestro Tokens Dashboard** has successfully initialized.\nAll application slash commands are synced, and channel interaction loops are **Active**.",
             color=discord.Color.gold()
         )
 
+    # Clickable slash command creation point
     @tree.command(name="donate_dashboard", description="Launch the customized Mestro Tokens donation menu panel")
     async def donate_dashboard(interaction: discord.Interaction):
         embed = discord.Embed(
