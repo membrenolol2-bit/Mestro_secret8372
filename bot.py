@@ -1008,8 +1008,11 @@ async def on_resumed():
 # Note: Use main.py to start the bot with token input
 # This file can also be run directly if DISCORD_BOT_TOKEN is set
 if __name__ == "__main__":
-    print("[BOT] Starting unified bot...")
-    print("💡 Tip: Use main.py for token input")
+    # Hooks our custom donation system panel straight onto your main command structure
+    setup_donation_dashboard(tree)
+    
+    # Boots the bot online (Make sure this variable matches your exact token name)
+    print("[BOT] Launching connection gateway layers...")
     client.run(BOT_TOKEN)
 
 # ── MESTRO TOKENS: LOGGING AND DONATION DASHBOARD END-OF-FILE ROUTER ─────────
