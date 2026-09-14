@@ -81,7 +81,7 @@ ALLOWED_GUILD_IDS = [
 ]
 
 print(f"[CONFIG] Parsed guild IDs: {ALLOWED_GUILD_IDS}")
-if ot ALLOWED_GUILD_IDS:
+if not in ALLOWED_GUILD_IDS:
     print("No ALLOWED_GUILD_IDS set - bot will work in all servers")
     print("   Consider setting ALLOWED_GUILD_IDS for better security")
 
