@@ -20,10 +20,11 @@ Commands:
 
 import discord
 from discord import app_commands
-from discord.ui import Modal, TextInput, View, Button 
+from discord.ui import Modal, TextInput, View, Button
 import asyncio
 import os
 import json
+import sys
 from discord import app_commands
 from dotenv import load_dotenv
 
