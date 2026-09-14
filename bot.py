@@ -25,7 +25,7 @@ import asyncio
 import traceback
 import discord
 from discord import app_commands
-from dotev import load_dotenv
+from dotenv import load_dotenv
 
 # Fix Windows console encoding BEFORE loading dotenv
 if sys.platform == "win32":
