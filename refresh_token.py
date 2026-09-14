@@ -11,7 +11,7 @@ Variables en Railway:
 
     NAKAMA_HOST               ← opcional
     NAKAMA_SERVER_KEY         ← opcional
-    REFRESH_INTERVAL_SECONDS  ← opcional (default 120)
+    REFRESH_INTERVAL_SECONDS  ← opcional (default 40)
 
 Usage:
     python refresh_token.py          → refresh once
