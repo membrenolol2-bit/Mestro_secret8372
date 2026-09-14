@@ -23,7 +23,7 @@ import os
 import sys
 import asyncio 
 import traceback
-import diswcord
+import discord
 from discord import app_commands
 from dotev import load_dotenv
 
