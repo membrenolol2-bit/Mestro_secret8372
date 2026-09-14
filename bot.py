@@ -1007,6 +1007,22 @@ async def on_resumed():
 
 # Note: Use main.py to start the bot with token input
 # This file can also be run directly if DISCORD_BOT_TOKEN is set
+# ── MESTRO TOKENS: LIVE CORE MONITOR PIPELINE ─────────────────────────────────
+async def send_to_log_channel(client, title, description, color=discord.Color.blue()):
+    """Broadcasts a dynamic system event notification directly into your private log channel."""
+    try:
+        log_channel_id = os.getenv("DISCORD_LOG_CHANNEL_ID")
+        if not log_channel_id:
+            return
+            
+        channel = client.get_channel(int(log_channel_id))
+        if channel:
+            embed = discord.Embed(title=title, description=description, color=color)
+            embed.set_footer(text="Mestro Tokens Live Monitor")
+            await channel.send(embed=embed)
+    except Exception as e:
+        print(f"[LOG_ERROR] Could not broadcast system alert embed: {e}")
+
 # ── MESTRO TOKENS: AUTOMATED ACTIVATION ENGINE ────────────────────────────────
 def setup_donation_dashboard(tree):
     """Hooks the dashboard architecture onto the core system tree."""
