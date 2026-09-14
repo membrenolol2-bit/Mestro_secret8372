@@ -1007,7 +1007,7 @@ async def on_resumed():
 
 # Note: Use main.py to start the bot with token input
 # This file can also be run directly if DISCORD_BOT_TOKEN is set
-# ── MESTRO TOKENS: DATABASE & LOGGER STORAGE ENGINE ────────────────────────────
+# ── 1. DATABASE & MONITOR STORAGE PIPELINES ──────────────────────────────────
 async def send_to_log_channel(client, title, description, color=discord.Color.blue()):
     """Broadcasts a status update embed directly into your private log channel."""
     try:
@@ -1041,7 +1041,7 @@ def append_universal_token(token_data_str, pool_type="normal"):
     with open(filename, "w") as f:
         json.dump(stock, f, indent=2)
 
-# ── MESTRO TOKENS: USER MODAL POPUP SUBMISSION WINDOWS ────────────────────────
+# ── 2. PLACED FIRST: THE MODAL POPUP WINDOW CLASSES ──────────────────────────
 class SingleTokenModal(Modal, title="Donate a Token"):
     token_input = TextInput(
         label="Paste Access Token / Session Key",
@@ -1092,7 +1092,7 @@ class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
             color=discord.Color.purple()
         )
 
-# ── MESTRO TOKENS: DASHBOARD VIEW INTERFACE LAYER ────────────────────────────
+# ── 3. PLACED SECOND: THE INTERFACE BUTTON VIEWS (READS MODALS ABOVE) ────────
 class MestroDonationDashboardView(View):
     def __init__(self, client):
         super().__init__(timeout=None)
@@ -1106,9 +1106,9 @@ class MestroDonationDashboardView(View):
     async def donate_multiple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(MultipleTokensModal(self.client))
 
-# ── MESTRO TOKENS: AUTOMATED ACTIVATION SYSTEM ───────────────────────────────
+# ── 4. PLACED THIRD: ACTIVATION LOOPS & COMMAND HANDLERS ────────────────────
 def setup_donation_dashboard(tree):
-    """Hooks the dashboard view and slash components onto your main client tree."""
+    """Hooks the dashboard tree structure into the running client."""
     @tree.client.event
     async def on_ready():
         print(f"[BOT] Unified system connected as {tree.client.user}")
@@ -1134,7 +1134,7 @@ def setup_donation_dashboard(tree):
         )
         await interaction.response.send_message(embed=embed, view=MestroDonationDashboardView(tree.client))
 
-# ── MAIN INITIATOR EXECUTION LAYER ────────────────────────────────────────────
+# ── 5. RUNTIME INITIATOR ENGINE ───────────────────────────────────────────────
 if __name__ == "__main__":
     setup_donation_dashboard(tree)
     print("[BOT] Launching connection gateway layers...")
