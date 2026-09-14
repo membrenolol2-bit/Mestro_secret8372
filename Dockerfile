@@ -13,4 +13,4 @@ COPY . .
 RUN mkdir -p /app/data
 
 # Entry point
-CMD ["python", "main.py"]
+CMD ["python", "bot.py"]
