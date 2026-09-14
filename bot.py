@@ -1,0 +1,1013 @@
+"""
+bot.py — Unified Discord Bot (single app, single CommandTree)
+================================================================
+All commands live under ONE discord.Client + ONE CommandTree,
+because they all belong to the same Discord application.
+Running separate Client instances with the same bot token
+causes duplicate gateway sessions and command-sync race
+conditions (429 rate limits, "CommandNotFound" errors).
+
+Commands:
+  /token               → public pool (everyone, cooldown)
+  /get-premium-token    → premium pool (role/whitelist, cooldown)
+  /add-premium-token    → [ADMIN] add token to premium pool
+  /add-premium-user     → [ADMIN] whitelist a user for premium
+  /status                → live pool stats
+  /donate-token          → [ADMIN] gift a token to a user
+  /my-tokens              → user's gifted tokens
+  /revoke-token           → [ADMIN] revoke a user's gifted tokens
+"""
+
+import json
+import os
+import sys
+import asncio
+import traceback
+import diswcord
+from discord import app_commands
+from dotev import load_dotenv
+
+# Fix Windows console encoding BEFORE loading dotenv
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+load_dotenv()
+
+from storage import (
+    get_public_token,
+    get_public_token_with_fallback,
+    check_cooldown,
+    set_cooldown,
+    format_time,
+    seconds_until_expiry,
+    add_premium_token,
+    pop_premium_token,
+    premium_pool_status,
+    is_premium_user,
+    add_premium_user,
+    increment_premium_uses,
+    global_status,
+    add_donated,
+    get_donated,
+    revoke_donated,
+    is_expired,
+    _read,
+    _write,
+    COOLDOWNS_FILE,
+    get_premium_pool,
+    get_env_accounts,
+    reset_all_cooldowns,
+    set_permanent_cooldown,
+    remove_permanent_cooldown,
+    get_rotating_token,
+    get_public_token_raw,
+)
+
+# ── Config ────────────────────────────────────────────────────────────────────
+BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN") or os.getenv("DISCORD_USER_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("Missing Discord token - set DISCORD_BOT_TOKEN or DISCORD_USER_TOKEN")
+
+raw_guild_ids = os.getenv("ALLOWED_GUILD_IDS", "")
+
+print(f"[CONFIG] Raw guild IDs: {raw_guild_ids!r}")
+
+ALLOWED_GUILD_IDS = [
+    int(g.strip())
+    for g in raw_guild_ids.split(",")
+    if g.strip().isdigit()
+]
+
+print(f"[CONFIG] Parsed guild IDs: {ALLOWED_GUILD_IDS}")
+if ot ALLOWED_GUILD_IDS:
+    print("No ALLOWED_GUILD_IDS set - bot will work in all servers")
+    print("   Consider setting ALLOWED_GUILD_IDS for better security")
+
+print(f"[BOT] Raw ALLOWED_GUILD_IDS env: {os.getenv('ALLOWED_GUILD_IDS', '')!r}")
+print(f"[BOT] Parsed ALLOWED_GUILD_IDS: {ALLOWED_GUILD_IDS}")
+
+PUBLIC_COOLDOWN_SECONDS = int(os.getenv("PUBLIC_COOLDOWN_SECONDS", str(20 * 60)))
+
+# ── Tier config ───────────────────────────────────────────────────────────────
+# Tier 1 → cooldown corto  (5 min por default)
+# Tier 2 → cooldown largo  (13 min por default)
+# Si el usuario tiene ambos roles, gana el tier más corto (tier 1)
+_t1_role = os.getenv("PREMIUM_TIER1_ROLE_ID", "")
+_t2_role = os.getenv("PREMIUM_TIER2_ROLE_ID", "")
+PREMIUM_TIER1_ROLE_ID  = int(_t1_role) if _t1_role.isdigit() else None
+PREMIUM_TIER2_ROLE_ID  = int(_t2_role) if _t2_role.isdigit() else None
+PREMIUM_TIER1_COOLDOWN = int(os.getenv("PREMIUM_TIER1_COOLDOWN", str(5 * 60)))   # 300s
+PREMIUM_TIER2_COOLDOWN = int(os.getenv("PREMIUM_TIER2_COOLDOWN", str(13 * 60)))  # 780s
+
+# Backward-compat: PREMIUM_ROLE_ID suelto → tier 2 si no se configuró tier 2
+_legacy_role = os.getenv("PREMIUM_ROLE_ID", "")
+if _legacy_role.isdigit() and PREMIUM_TIER2_ROLE_ID is None:
+    PREMIUM_TIER2_ROLE_ID = int(_legacy_role)
+
+ADMIN_ROLE_ID_STR = os.getenv("ADMIN_ROLE_ID", "")
+ADMIN_ROLE_ID     = int(ADMIN_ROLE_ID_STR) if ADMIN_ROLE_ID_STR.isdigit() else None
+
+ADMIN_USER_IDS = {
+    s.strip()
+    for s in os.getenv("ADMIN_USER_IDS", "").split(",")
+    if s.strip().isdigit()
+}
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+async def resolve_member(interaction: discord.Interaction) -> discord.Member | None:
+    """
+    Get the invoking member with their roles populated.
+    Slash command interactions sometimes carry a partial guild object,
+    so we go through client.get_guild() → fetch_member to guarantee
+    we get a fully-hydrated Member (including roles).
+    """
+    # interaction.user is already a Member when the guild is cached
+    if isinstance(interaction.user, discord.Member) and interaction.user.roles:
+        return interaction.user
+
+    if interaction.guild_id is None:
+        return None
+
+    # Use the client's cached guild (fully populated) instead of the
+    # partial interaction.guild object
+    guild = client.get_guild(interaction.guild_id)
+    if guild is None:
+        try:
+            guild = await client.fetch_guild(interaction.guild_id)
+        except (discord.Forbidden, discord.HTTPException):
+            return None
+
+    member = guild.get_member(interaction.user.id)
+    if member is None:
+        try:
+            member = await guild.fetch_member(interaction.user.id)
+        except (discord.NotFound, discord.HTTPException):
+            return None
+    return member
+
+
+async def has_admin_access(interaction: discord.Interaction) -> bool:
+    """
+    Resolves the invoking member fully before checking permissions.
+    Always pass the full interaction — never a bare user/member object.
+    """
+    user = interaction.user
+    # Fast path: ADMIN_USER_IDS check needs no guild data
+    if str(user.id) in ADMIN_USER_IDS:
+        return True
+
+    member = await resolve_member(interaction)
+    if member is None:
+        return False
+
+    if isinstance(member, discord.Member):
+        try:
+            if member.guild_permissions.administrator:
+                return True
+        except Exception:
+            pass
+        if ADMIN_ROLE_ID and any(r is not None and r.id == ADMIN_ROLE_ID for r in (member.roles or [])):
+            return True
+
+    return False
+
+
+def get_premium_tier(member: discord.Member, user_id: str) -> tuple[int, int] | None:
+    """
+    Returns (tier_number, cooldown_seconds) for the best tier the user qualifies for,
+    or None if the user has no premium access at all.
+    Tier 1 beats Tier 2 (shorter cooldown wins).
+    Whitelisted users (/add-premium-user) get Tier 2 by default.
+    """
+    role_ids = {r.id for r in (member.roles or []) if r is not None}
+
+    if PREMIUM_TIER1_ROLE_ID and PREMIUM_TIER1_ROLE_ID in role_ids:
+        return 1, PREMIUM_TIER1_COOLDOWN
+
+    if PREMIUM_TIER2_ROLE_ID and PREMIUM_TIER2_ROLE_ID in role_ids:
+        return 2, PREMIUM_TIER2_COOLDOWN
+
+    if is_premium_user(user_id):
+        return 2, PREMIUM_TIER2_COOLDOWN
+
+    return None
+
+
+ALLOWED_GUILD_IDS_STR = {str(g) for g in ALLOWED_GUILD_IDS}
+
+
+def guild_allowed(interaction: discord.Interaction) -> bool:
+    # If no guild IDs are set, allow all servers (user token mode)
+    if not ALLOWED_GUILD_IDS:
+        return True
+    return str(interaction.guild_id) in ALLOWED_GUILD_IDS_STR
+
+
+# ── Bot setup ─────────────────────────────────────────────────────────────────
+intents = discord.Intents.default()
+intents.members = True
+client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client)
+
+
+# ── /token (public pool) ───────────────────────────────────────────────────────
+@tree.command(name="token", description="Get your session token")
+async def token_cmd(interaction: discord.Interaction):
+    try:
+        if not guild_allowed(interaction):
+            print(f"[PUBLIC] 🚫 Denied — incoming guild_id={interaction.guild_id!r} "
+                  f"(type={type(interaction.guild_id).__name__}) "
+                  f"allowed={ALLOWED_GUILD_IDS!r} "
+                  f"match={interaction.guild_id in ALLOWED_GUILD_IDS}")
+            await interaction.response.send_message(
+                f"🚫 **Access Denied** — unauthorized server.\n"
+                f"-# server id: `{interaction.guild_id}` | allowed: `{ALLOWED_GUILD_IDS}` | "
+                f"match: `{interaction.guild_id in ALLOWED_GUILD_IDS}`",
+                ephemeral=True
+            )
+            return
+
+        user_id = str(interaction.user.id)
+
+        # Use rotating token from env accounts
+        tokens = get_rotating_token()
+        if not tokens:
+            await interaction.response.send_message(
+                " **No valid token available** — add tokens to .env file",
+                ephemeral=True,
+            )
+            return
+
+        ttl = seconds_until_expiry(tokens["token"])
+        payload = {
+            "token": tokens["token"],
+            "refresh_token": tokens["refresh_token"],
+            "expires_in": ttl,
+            "_note": "Made by Forest and Mestro_ac",
+        }
+
+        account_num = tokens.get("account")
+        account_note = f" (account {account_num})" if account_num else ""
+
+        json_bytes = json.dumps(payload, indent=2).encode("utf-8")
+        file = discord.File(
+            fp=__import__("io").BytesIO(json_bytes),
+            filename="token.json",
+        )
+
+        await interaction.response.send_message(
+            f"✅ **Token**{account_note}\n"
+            f"```json\n{json.dumps(payload, indent=2)}\n```",
+            file=file,
+            ephemeral=True,
+        )
+        print(f"[PUBLIC] ✅ Token sent to {interaction.user} ({interaction.user.id}){account_note}")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        print(f"[PUBLIC]  Error: {e}")
+        traceback.print_exc()
+
+
+# ── /get-premium-token ────────────────────────────────────────────────────────
+@tree.command(name="get-premium-token", description="Get a premium session token (buyers only)")
+async def get_premium_token_cmd(interaction: discord.Interaction):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        user_id = str(interaction.user.id)
+        member  = await resolve_member(interaction)
+
+        # ── Debug log ─────────────────────────────────────────────────
+        member_roles = [r.id for r in (member.roles or []) if r is not None] if member else []
+        print(
+            f"[PREMIUM] user={interaction.user} ({user_id}) | "
+            f"member={'OK' if member else 'NONE ← intents/fetch failed'} | "
+            f"TIER1_ROLE={PREMIUM_TIER1_ROLE_ID!r} | "
+            f"TIER2_ROLE={PREMIUM_TIER2_ROLE_ID!r} | "
+            f"role_ids={member_roles} | "
+            f"whitelist={is_premium_user(user_id)}"
+        )
+        # ─────────────────────────────────────────────────────────────
+
+        if not member:
+            await interaction.response.send_message(
+                " Member lookup failed — bot may be missing **Server Members Intent**.",
+                ephemeral=True,
+            )
+            return
+
+        tier_info = get_premium_tier(member, user_id)
+
+        if tier_info is None:
+            # Build a hint showing which roles grant access
+            hints = []
+            if PREMIUM_TIER1_ROLE_ID:
+                hints.append(f"<@&{PREMIUM_TIER1_ROLE_ID}>")
+            if PREMIUM_TIER2_ROLE_ID:
+                hints.append(f"<@&{PREMIUM_TIER2_ROLE_ID}>")
+            role_hint = " or ".join(hints) if hints else "a buyer role"
+            await interaction.response.send_message(
+                f"💎 **Premium Required** — only buyers with {role_hint} can use this.",
+                ephemeral=True,
+            )
+            return
+
+        tier_num, cooldown_secs = tier_info
+
+        token_entry = pop_premium_token()
+        if not token_entry:
+            await interaction.response.send_message(
+                " **Premium pool is empty** — ask an admin to run `/add-premium-token`.",
+                ephemeral=True,
+            )
+            return
+
+        increment_premium_uses(user_id)
+
+        ttl = seconds_until_expiry(token_entry["token"])
+        payload = {
+            "token":         token_entry["token"],
+            "refresh_token": token_entry["refresh_token"],
+            "expires_in":    ttl,
+            "tier":          tier_num,
+            "_note": "Made by Forest and Mestro_ac",
+        }
+
+        await interaction.response.send_message(
+            f"💎 **Premium Token** (Tier {tier_num})\n"
+            f"```json\n{json.dumps(payload, indent=2)}\n```",
+            ephemeral=True,
+        )
+        print(f"[PREMIUM] ✅ Token sent to {interaction.user} ({user_id}) — tier {tier_num}, cooldown {cooldown_secs}s")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        print(f"[PREMIUM]  Error: {e}")
+        traceback.print_exc()
+
+
+# ── /add-premium-token ────────────────────────────────────────────────────────
+@tree.command(name="add-premium-token", description="[ADMIN] Add a token to the premium pool")
+@app_commands.describe(token="JWT bearer token", refresh_token="JWT refresh token")
+async def add_premium_token_cmd(interaction: discord.Interaction, token: str, refresh_token: str):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        if not await has_admin_access(interaction):
+            await interaction.response.send_message("🚫 **Admin Only**.", ephemeral=True)
+            return
+
+        if not token.startswith("ey") or not refresh_token.startswith("ey"):
+            await interaction.response.send_message(
+                " **Invalid tokens** — must be JWT strings starting with `ey...`",
+                ephemeral=True,
+            )
+            return
+
+        ttl = seconds_until_expiry(token)
+        if ttl < 60:
+            await interaction.response.send_message(
+                f" **Token already expired** ({ttl}s remaining) — use a fresh one.",
+                ephemeral=True,
+            )
+            return
+
+        new_size = add_premium_token(token, refresh_token)
+        await interaction.response.send_message(
+            f"✅ **Token added to premium pool**\n"
+            f"```json\n{json.dumps({'pool_size': new_size, 'token_expires_in': ttl}, indent=2)}\n```",
+            ephemeral=True,
+        )
+        print(f"[PREMIUM] ➕ Token added by {interaction.user} — pool now {new_size}")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        traceback.print_exc()
+
+
+# ── /add-premium-user ─────────────────────────────────────────────────────────
+@tree.command(name="add-premium-user", description="[ADMIN] Grant premium access to a user")
+@app_commands.describe(user="Discord user to grant premium access")
+async def add_premium_user_cmd(interaction: discord.Interaction, user: discord.Member):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        if not await has_admin_access(interaction):
+            await interaction.response.send_message("🚫 **Admin Only**.", ephemeral=True)
+            return
+
+        add_premium_user(str(user.id), str(interaction.user.id))
+        await interaction.response.send_message(
+            f"✅ **{user.mention} now has premium access** — can use `/get-premium-token`.",
+            ephemeral=True,
+        )
+        print(f"[PREMIUM] ✅ {interaction.user} granted premium to {user} ({user.id})")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        traceback.print_exc()
+
+
+# ── /status ───────────────────────────────────────────────────────────────────
+@tree.command(name="status", description="View live token pool status")
+async def status_cmd(interaction: discord.Interaction):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        s = global_status()
+        pub  = s["public"]
+        prem = s["premium"]
+        don  = s["donated"]
+
+        payload = {
+            "public_pool": {
+                "status": "active" if pub["valid"] else "expired",
+                "expires_in": pub["expires_in"],
+            },
+            "premium_pool": {
+                "valid_tokens": prem["valid"],
+                "expired_tokens": prem["expired"],
+                "total_tokens": prem["total"],
+            },
+            "donated_tokens": {
+                "users_with_gifts": don["users_with_donated"],
+                "total_donated": don["total_donated_tokens"],
+            },
+            "premium_users_whitelisted": s["premium_users"],
+        }
+
+        await interaction.response.send_message(
+            f"📊 **System Status**\n"
+            f"```json\n{json.dumps(payload, indent=2)}\n```",
+            ephemeral=True,
+        )
+        print(f"[STATUS] Checked by {interaction.user}")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        traceback.print_exc()
+
+
+# ── /view-tokens ───────────────────────────────────────────────────────────────
+@tree.command(name="view-tokens", description="[ADMIN] View all available tokens")
+async def view_tokens_cmd(interaction: discord.Interaction):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        if not await has_admin_access(interaction):
+            await interaction.response.send_message("🚫 **Admin Only**.", ephemeral=True)
+            return
+
+        # Get public token
+        public_token = get_public_token()
+        
+        # Get premium pool
+        premium_pool = get_premium_pool()
+        
+        # Get env accounts
+        env_accounts = get_env_accounts()
+
+        payload = {
+            "public_token": public_token if public_token else "None or expired",
+            "premium_pool": premium_pool,
+            "env_accounts": env_accounts,
+            "_note": "Made by Forest and Mestro_ac",
+        }
+
+        json_bytes = json.dumps(payload, indent=2).encode("utf-8")
+        file = discord.File(
+            fp=__import__("io").BytesIO(json_bytes),
+            filename="all_tokens.json",
+        )
+
+        await interaction.response.send_message(
+            f"🔑 **All Available Tokens**",
+            file=file,
+            ephemeral=True,
+        )
+        print(f"[VIEW_TOKENS] Tokens viewed by {interaction.user}")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        traceback.print_exc()
+
+
+# ── /remove-cooldown-all ───────────────────────────────────────────────────────
+@tree.command(name="remove-cooldown-all", description="[ADMIN] Remove all cooldowns (including permanent) for all users")
+async def remove_cooldown_all_cmd(interaction: discord.Interaction):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        if not await has_admin_access(interaction):
+            await interaction.response.send_message("🚫 **Admin Only**.", ephemeral=True)
+            return
+
+        count = reset_all_cooldowns()
+        await interaction.response.send_message(
+            f"✅ **Removed all cooldowns (including permanent) for {count} users**",
+            ephemeral=True,
+        )
+        print(f"[COOLDOWN] All cooldowns removed by {interaction.user}")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        traceback.print_exc()
+
+
+# ── /add-cooldown ───────────────────────────────────────────────────────────────
+@tree.command(name="add-cooldown", description="[ADMIN] Add permanent cooldown to a specific user")
+@app_commands.describe(user="Discord user to add cooldown to", pool="Pool type (public/premium)")
+async def add_cooldown_cmd(interaction: discord.Interaction, user: discord.Member, pool: str = "public"):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        if not await has_admin_access(interaction):
+            await interaction.response.send_message("🚫 **Admin Only**.", ephemeral=True)
+            return
+
+        if pool not in ["public", "premium"]:
+            await interaction.response.send_message(" **Pool must be 'public' or 'premium'**", ephemeral=True)
+            return
+
+        set_permanent_cooldown(str(user.id), pool)
+        await interaction.response.send_message(
+            f"✅ **Added permanent {pool} cooldown to {user.mention}**",
+            ephemeral=True,
+        )
+        print(f"[COOLDOWN] Permanent {pool} cooldown added to {user} by {interaction.user}")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        traceback.print_exc()
+
+
+# ── /add-cooldown-all ──────────────────────────────────────────────────────────
+@tree.command(name="add-cooldown-all", description="[ADMIN] Add permanent cooldowns to all users")
+@app_commands.describe(pool="Pool type (public/premium)")
+async def add_cooldown_all_cmd(interaction: discord.Interaction, pool: str = "public"):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        if not await has_admin_access(interaction):
+            await interaction.response.send_message("🚫 **Admin Only**.", ephemeral=True)
+            return
+
+        if pool not in ["public", "premium"]:
+            await interaction.response.send_message(" **Pool must be 'public' or 'premium'**", ephemeral=True)
+            return
+
+        # Get all members in the guild and add permanent cooldown to all
+        guild = client.get_guild(interaction.guild_id)
+        if not guild:
+            await interaction.response.send_message(" **Could not access guild**", ephemeral=True)
+            return
+
+        count = 0
+        async for member in guild.fetch_members(limit=None):
+            set_permanent_cooldown(str(member.id), pool)
+            count += 1
+
+        await interaction.response.send_message(
+            f"✅ **Added permanent {pool} cooldowns to {count} users**",
+            ephemeral=True,
+        )
+        print(f"[COOLDOWN] Permanent {pool} cooldowns added to all users by {interaction.user}")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        traceback.print_exc()
+
+
+# ── /donate-token ─────────────────────────────────────────────────────────────
+@tree.command(name="donate-token", description="[ADMIN] Gift a token to a specific user")
+@app_commands.describe(
+    user="Discord user to receive the token",
+    token="JWT bearer token",
+    refresh_token="JWT refresh token",
+)
+async def donate_token_cmd(
+    interaction: discord.Interaction,
+    user: discord.Member,
+    token: str,
+    refresh_token: str,
+):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        if not await has_admin_access(interaction):
+            await interaction.response.send_message("🚫 **Admin Only**.", ephemeral=True)
+            return
+
+        if not token.startswith("ey") or not refresh_token.startswith("ey"):
+            await interaction.response.send_message(
+                " **Invalid tokens** — must be JWT strings starting with `ey...`",
+                ephemeral=True,
+            )
+            return
+
+        ttl = seconds_until_expiry(token)
+        if ttl < 60:
+            await interaction.response.send_message(
+                f" **Token already expired** ({ttl}s remaining).",
+                ephemeral=True,
+            )
+            return
+
+        add_donated(
+            target_id=str(user.id),
+            token=token,
+            refresh_token=refresh_token,
+            given_by=str(interaction.user.id),
+        )
+
+        await interaction.response.send_message(
+            f"🎁 **Token donated to {user.mention}**\n"
+            f"```json\n{json.dumps({'expires_in': ttl, 'recipient': str(user.id), 'given_by': str(interaction.user.id)}, indent=2)}\n```\n"
+            f">>> They can claim it with `/my-tokens`.",
+            ephemeral=True,
+        )
+        print(f"[DONOR] 🎁 Token donated to {user} ({user.id}) by {interaction.user}")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        print(f"[DONOR]  Error in /donate-token: {e}")
+        traceback.print_exc()
+
+
+# ── /my-tokens ────────────────────────────────────────────────────────────────
+@tree.command(name="my-tokens", description="See all tokens gifted to you")
+async def my_tokens_cmd(interaction: discord.Interaction):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        user_id = str(interaction.user.id)
+
+        on_cd, remaining = check_cooldown(user_id, "my_tokens", 60)
+        if on_cd:
+            await interaction.response.send_message(
+                f"⏱️ Slow down — try again in `{format_time(remaining)}`.",
+                ephemeral=True,
+            )
+            return
+        set_cooldown(user_id, "my_tokens")
+
+        donated = get_donated(user_id)
+        if not donated:
+            await interaction.response.send_message(
+                "🎁 **No gifted tokens** — ask an admin to run `/donate-token` for you.",
+                ephemeral=True,
+            )
+            return
+
+        valid = [t for t in donated if not is_expired(t["token"])]
+        expired_count = len(donated) - len(valid)
+
+        if not valid:
+            await interaction.response.send_message(
+                f" **All {expired_count} gifted token(s) have expired** — ask an admin for a new one.",
+                ephemeral=True,
+            )
+            return
+
+        payload = []
+        for i, t in enumerate(valid, 1):
+            ttl = seconds_until_expiry(t["token"])
+            payload.append({
+                "gift": i,
+                "token": t["token"],
+                "refresh_token": t["refresh_token"],
+                "expires_in": ttl,
+                "given_by": t["given_by"],
+            })
+
+        raw = json.dumps(payload, indent=2)
+        header = f"🎁 **Your Gifted Tokens** — `{len(valid)}` valid, `{expired_count}` expired\n"
+
+        if len(header) + len(raw) + 10 <= 1990:
+            await interaction.response.send_message(
+                f"{header}```json\n{raw}\n```",
+                ephemeral=True,
+            )
+        else:
+            await interaction.response.send_message(
+                f"{header}*(Sending {len(valid)} token(s) separately)*",
+                ephemeral=True,
+            )
+            for entry in payload:
+                chunk = json.dumps(entry, indent=2)
+                await interaction.followup.send(
+                    f"```json\n{chunk}\n```",
+                    ephemeral=True,
+                )
+
+        print(f"[DONOR] 📋 /my-tokens: sent {len(valid)} tokens to {interaction.user}")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        print(f"[DONOR]  Error in /my-tokens: {e}")
+        traceback.print_exc()
+
+
+# ── /reset-cooldown ───────────────────────────────────────────────────────────
+@tree.command(name="reset-cooldown", description="[ADMIN] Reset cooldowns for a user or everyone")
+@app_commands.describe(
+    user="User to reset (leave empty to reset ALL users)",
+    pool="Which cooldown to reset (leave empty to reset all pools)",
+)
+@app_commands.choices(pool=[
+    app_commands.Choice(name="public",    value="public"),
+    app_commands.Choice(name="premium",   value="premium"),
+    app_commands.Choice(name="my_tokens", value="my_tokens"),
+])
+async def reset_cooldown_cmd(
+    interaction: discord.Interaction,
+    user: discord.Member = None,
+    pool: str = None,
+):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        if not await has_admin_access(interaction):
+            await interaction.response.send_message("🚫 **Admin Only**.", ephemeral=True)
+            return
+
+        data = _read(COOLDOWNS_FILE, {})
+
+        if user:
+            # Reset one user
+            uid = str(user.id)
+            if uid not in data:
+                await interaction.response.send_message(
+                    f" **{user.mention}** has no active cooldowns.", ephemeral=True
+                )
+                return
+            if pool:
+                data[uid].pop(pool, None)
+                desc = f"pool `{pool}`"
+            else:
+                del data[uid]
+                desc = "all pools"
+            _write(COOLDOWNS_FILE, data)
+            await interaction.response.send_message(
+                f"✅ Cooldown reset for {user.mention} — {desc}.", ephemeral=True
+            )
+            print(f"[ADMIN] 🔄 {interaction.user} reset cooldown for {user} ({desc})")
+        else:
+            # Reset everyone
+            if pool:
+                for uid in data:
+                    data[uid].pop(pool, None)
+                desc = f"pool `{pool}` for all users"
+            else:
+                data = {}
+                desc = "all pools for all users"
+            _write(COOLDOWNS_FILE, data)
+            await interaction.response.send_message(
+                f"✅ Cooldowns reset — {desc}.", ephemeral=True
+            )
+            print(f"[ADMIN] 🔄 {interaction.user} reset cooldowns — {desc}")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        print(f"[ADMIN]  Error in /reset-cooldown: {e}")
+        traceback.print_exc()
+
+
+# ── /revoke-token ─────────────────────────────────────────────────────────────
+@tree.command(name="revoke-token", description="[ADMIN] Remove all donated tokens from a user")
+@app_commands.describe(user="User whose donated tokens to revoke")
+async def revoke_token_cmd(interaction: discord.Interaction, user: discord.Member):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        if not await has_admin_access(interaction):
+            await interaction.response.send_message("🚫 **Admin Only**.", ephemeral=True)
+            return
+
+        count = revoke_donated(str(user.id))
+        await interaction.response.send_message(
+            f" **Revoked `{count}` donated token(s)** from {user.mention}."
+            if count > 0 else
+            f" **{user.mention} had no donated tokens** to revoke.",
+            ephemeral=True,
+        )
+        if count > 0:
+            print(f"[DONOR]  {interaction.user} revoked {count} tokens from {user}")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        print(f"[DONOR]  Error in /revoke-token: {e}")
+        traceback.print_exc()
+
+
+# ── Dashboard Button ──────────────────────────────────────────────────────────
+class DashboardView(discord.ui.View):
+    """Persistent view — survives bot restarts (timeout=None)."""
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Get Token",
+        style=discord.ButtonStyle.primary,
+        emoji="🎫",
+        custom_id="dashboard_get_token",   # persistent ID
+    )
+    async def get_token_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            user_id = str(interaction.user.id)
+
+            on_cd, remaining = check_cooldown(user_id, "public", PUBLIC_COOLDOWN_SECONDS)
+            if on_cd:
+                await interaction.response.send_message(
+                    f"⏱️ **Cooldown Active** — available in `{format_time(remaining)}`",
+                    ephemeral=True,
+                )
+                return
+
+            tokens, source = get_public_token_with_fallback()
+            if not tokens:
+                await interaction.response.send_message(
+                    " **No valid token available** — try again in 30 seconds.",
+                    ephemeral=True,
+                )
+                return
+
+            set_cooldown(user_id, "public")
+
+            ttl = seconds_until_expiry(tokens["token"])
+            payload = {
+                "token":         tokens["token"],
+                "refresh_token": tokens["refresh_token"],
+                "expires_in":    ttl,
+                "next_use_in":   PUBLIC_COOLDOWN_SECONDS,
+            }
+
+            fallback_note = (
+                "\n> ⚡ *Public token refreshing — backup token served*"
+                if source != "public" else ""
+            )
+
+            await interaction.response.send_message(
+                f"✅ **Token** | Next use in `{format_time(PUBLIC_COOLDOWN_SECONDS)}`{fallback_note}\n"
+                f"```json\n{json.dumps(payload, indent=2)}\n```",
+                ephemeral=True,
+            )
+            print(f"[DASHBOARD] ✅ Token sent to {interaction.user} ({user_id}) — source: {source}")
+
+        except Exception as e:
+            try:
+                await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+            except Exception:
+                pass
+            print(f"[DASHBOARD]  Error in button: {e}")
+            traceback.print_exc()
+
+
+# ── /dashboard ────────────────────────────────────────────────────────────────
+@tree.command(name="dashboard", description="[ADMIN] Post a token button visible to everyone")
+async def dashboard_cmd(interaction: discord.Interaction):
+    try:
+        if not guild_allowed(interaction):
+            await interaction.response.send_message("🚫 Unauthorized server.", ephemeral=True)
+            return
+
+        if not await has_admin_access(interaction):
+            await interaction.response.send_message("🚫 **Admin Only**.", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title="🎫 Token Station",
+            description=(
+                "Press the button below to get your session token.\n"
+                f"Cooldown: **{format_time(PUBLIC_COOLDOWN_SECONDS)}** per user."
+            ),
+            color=discord.Color.blurple(),
+        )
+        embed.set_footer(text="Token is only visible to you • Ephemeral")
+
+        await interaction.response.send_message(
+            embed=embed,
+            view=DashboardView(),
+        )
+        print(f"[DASHBOARD] 📌 Posted by {interaction.user} in channel {interaction.channel_id}")
+
+    except Exception as e:
+        try:
+            await interaction.response.send_message(f" **Error:** `{e}`", ephemeral=True)
+        except Exception:
+            pass
+        print(f"[DASHBOARD]  Error in /dashboard: {e}")
+        traceback.print_exc()
+
+
+# ── Events ────────────────────────────────────────────────────────────────────
+@client.event
+async def on_ready():
+    # Register persistent views so buttons survive restarts
+    client.add_view(DashboardView())
+
+    if ALLOWED_GUILD_IDS:
+        # Sync to specific guilds
+        guild_objects = [discord.Object(id=gid) for gid in ALLOWED_GUILD_IDS]
+        for guild_obj in guild_objects:
+            tree.copy_global_to(guild=guild_obj)
+            synced = await tree.sync(guild=guild_obj)
+        print(f"\n{'='*55}")
+        print(f"✅ [BOT] Connected as: {client.user}")
+        print(f"✅ Synced {len(synced)} commands to guilds: {ALLOWED_GUILD_IDS}")
+        print(f"✅ Commands: {[c.name for c in synced]}")
+        print(f"✅ Dashboard view registered (persistent)")
+        print(f"{'='*55}\n")
+    else:
+        # Sync globally (user token mode)
+        synced = await tree.sync()
+        print(f"\n{'='*55}")
+        print(f"✅ [BOT] Connected as: {client.user}")
+        print(f"✅ Synced {len(synced)} commands globally")
+        print(f"✅ Commands: {[c.name for c in synced]}")
+        print(f"✅ Dashboard view registered (persistent)")
+        print(f"✅ Running in user token mode - commands available in all servers")
+        print(f"{'='*55}\n")
+
+@client.event
+async def on_disconnect():
+    print("[BOT]  Disconnected")
+
+@client.event
+async def on_resumed():
+    print("[BOT] ✅ Reconnected")
+
+# Note: Use main.py to start the bot with token input
+# This file can also be run directly if DISCORD_BOT_TOKEN is set
+if __name__ == "__main__":
+    print("[BOT] Starting unified bot...")
+    print("💡 Tip: Use main.py for token input")
+    client.run(BOT_TOKEN)
