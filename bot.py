@@ -1007,137 +1007,17 @@ async def on_resumed():
 
 # Note: Use main.py to start the bot with token input
 # This file can also be run directly if DISCORD_BOT_TOKEN is set
-if __name__ == "__main__":
-    # Hooks our custom donation system panel straight onto your main command structure
-    def setup_donation_dashboard(tree):
-    
-    # Boots the bot online (Make sure this variable matches your exact token name)
-    print("[BOT] Launching connection gateway layers...")
-    client.run(BOT_TOKEN)
-
-# ── MESTRO TOKENS: LOGGING AND DONATION DASHBOARD END-OF-FILE ROUTER ─────────
-import discord
-from discord import app_commands
-from discord.ui import Modal, TextInput, View, Button
-import os
-import json
-
-async def send_to_log_channel(client, title, description, color=discord.Color.blue()):
-    """Broadcasts a dynamic system event notification directly into your private log channel."""
-    try:
-        log_channel_id = os.getenv("DISCORD_LOG_CHANNEL_ID")
-        if not log_channel_id:
-            return
-            
-        channel = client.get_channel(int(log_channel_id))
-        if channel:
-            embed = discord.Embed(title=title, description=description, color=color)
-            embed.set_footer(text="Mestro Tokens Live Monitor")
-            await channel.send(embed=embed)
-    except Exception as e:
-        print(f"[LOG_ERROR] Could not broadcast system alert embed: {e}")
-
-def append_universal_token(token_data_str, pool_type="normal"):
-    """Appends raw text token blocks directly into the local database JSON storage stock sheets."""
-    filename = "heroic_stock.json" if pool_type == "heroic" else "normal_stock.json"
-    stock = []
-    try:
-        if os.path.exists(filename):
-            with open(filename, "r") as f:
-                stock = json.load(f)
-    except Exception:
-        stock = []
-        
-    stock.append({
-        "input_data": token_data_str.strip(),
-        "_source_type": "user_donated"
-    })
-    
-    with open(filename, "w") as f:
-        json.dump(stock, f, indent=2)
-
-# ── 1. SINGLE TOKEN INPUT WINDOW ─────────────────────────────────────────────
-class SingleTokenModal(Modal, title="Donate a Token"):
-    token_input = TextInput(
-        label="Paste Access Token / Session Key",
-        style=discord.TextStyle.long,
-        placeholder="Paste your token string here...",
-        required=True
-    )
-
-    def __init__(self, client):
-        super().__init__()
-        self.client = client
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        raw_data = self.token_input.value.strip()
-        
-        append_universal_token(raw_data, pool_type="normal")
-        await interaction.followup.send("🎉 **Success!** Your token donation has been safely added to the pool!", ephemeral=True)
-        
-        await send_to_log_channel(
-            self.client, 
-            "🎁 Single Token Received", 
-            f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target Database:** `normal_stock.json`",
-            color=discord.Color.green()
-        )
-
-# ── 2. MULTIPLE LABELED TOKENS INPUT WINDOW ──────────────────────────────────
-class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
-    tokens_input = TextInput(
-        label="Paste Multiple Tokens Below",
-        style=discord.TextStyle.paragraph,
-        placeholder="Label them clearly by number, for example:\ntoken 1: [paste first token]\ntoken 2: [paste second token]",
-        required=True
-    )
-
-    def __init__(self, client):
-        super().__init__()
-        self.client = client
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        raw_data = self.tokens_input.value.strip()
-        
-        append_universal_token(raw_data, pool_type="normal")
-        await interaction.followup.send("🎉 **Success!** Your multiple token submissions have been saved directly!", ephemeral=True)
-        
-        await send_to_log_channel(
-            self.client, 
-            "📦 Bulk Tokens Received", 
-            f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target Database:** `normal_stock.json`\n\n*Multi-line text block has been recorded.*",
-            color=discord.Color.purple()
-        )
-
-# ── 3. BUTTONS DASHBOARD PRESENTS ───────────────────────────────────────────
-class MestroDonationDashboardView(View):
-    def __init__(self, client):
-        super().__init__(timeout=None)
-        self.client = client
-        
-    @discord.ui.button(label="Donate a Token", style=discord.ButtonStyle.success, custom_id="donate_single_universal")
-    async def donate_single_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(SingleTokenModal(self.client))
-        
-    @discord.ui.button(label="Donate Multiple Tokens", style=discord.ButtonStyle.primary, custom_id="donate_multiple_universal")
-    async def donate_multiple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(MultipleTokensModal(self.client))
-
-# ── 4. BACKEND INTEGRATION GATEWAY ROUTER ───────────────────────────────────
+# ── MESTRO TOKENS: AUTOMATED ACTIVATION ENGINE ────────────────────────────────
 def setup_donation_dashboard(tree):
-    """Hooks the /donate_dashboard command structure safely onto your main client tree hierarchy."""
-    
+    """Hooks the dashboard architecture onto the core system tree."""
     @tree.client.event
     async def on_ready():
-        print(f"[BOT] Connected as {tree.client.user}")
-        
-        # Globally registers slash commands to Discord servers on boot initialization
+        print(f"[BOT] Unified system connected as {tree.client.user}")
         try:
             await tree.sync()
-            print("[SYNC] Global application commands synchronized successfully.")
+            print("[SYNC] Application commands synced with Discord!")
         except Exception as e:
-            print(f"[SYNC_ERROR] Command sync failed: {e}")
+            print(f"[SYNC_ERROR] Command registry sync failed: {e}")
 
         await send_to_log_channel(
             tree.client, 
@@ -1146,7 +1026,6 @@ def setup_donation_dashboard(tree):
             color=discord.Color.gold()
         )
 
-    # Clickable slash command creation point
     @tree.command(name="donate_dashboard", description="Launch the customized Mestro Tokens donation menu panel")
     async def donate_dashboard(interaction: discord.Interaction):
         embed = discord.Embed(
@@ -1155,3 +1034,9 @@ def setup_donation_dashboard(tree):
             color=discord.Color.blue()
         )
         await interaction.response.send_message(embed=embed, view=MestroDonationDashboardView(tree.client))
+
+# ── MAIN INITIATOR EXECUTION LAYER ────────────────────────────────────────────
+if __name__ == "__main__":
+    setup_donation_dashboard(tree)
+    print("[BOT] Launching connection gateway layers...")
+    client.run(BOT_TOKEN)
