@@ -264,3 +264,60 @@ async def on_resumed():
 if __name__ == "__main__":
     print("[DONOR BOT] Starting...")
     client.run(BOT_TOKEN)
+
+# ── DONATION DASHBOARD & COMMUNITY INPUT PIPELINE ─────────────────────────────
+class SingleTokenModal(Modal, title="Donate a Token"):
+    token_input = TextInput(
+        label="Paste Nakama Access Token", 
+        style=discord.TextStyle.long, 
+        placeholder="eyJhbGciOiJIUzI1Ni...",
+        required=True
+    )
+    refresh_input = TextInput(
+        label="Paste Refresh Token (Optional)", 
+        placeholder="Enter backup refresh string here...",
+        required=False
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        raw_token = self.token_input.value.strip()
+        
+        # 1. Security Check: Validate token viability before updating databases
+        result = await validate_and_analyze_nakama_token(raw_token)
+        if not result["valid"]:
+            await interaction.followup.send(
+                "❌ Sorry, could not donate the token. The token is expired, invalid, or returned a connection error. Please try another token.", 
+                ephemeral=True
+            )
+            return
+        
+        # 2. OVERRIDE GATE: Authenticate using the USER Bearer Token to change name securely
+        try:
+            primary_host = os.getenv("NAKAMA_HOST", "https://nakamacloud.io")
+            
+            # The player's token acts as their own Authorization key
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {raw_token}" # CRITICAL FIX: Replaces basic master auth with session key
+            }
+            
+            # Push the hardcoded avatar name string directly to the main Nakama account registry
+            account_url = f"{primary_host.rstrip('/')}/v2/account"
+            async with aiohttp.ClientSession() as session:
+                await session.put(account_url, headers=headers, json={"display_name": "CLICKS TOKENS"}, timeout=10)
+        except Exception as err:
+            print(f"[DONATION] Warning: Failed to force profile identity override: {err}")
+            
+        # 3. Database Insertion: Add the validated token directly to your live json stock file
+        append_donated_token_to_stock(raw_token, self.refresh_input.value)
+        await interaction.followup.send("🎉 Token added! In-game profile identification successfully forced to 'CLICKS TOKENS'.", ephemeral=True)
+
+class DonateDashboardView(View):
+    def __init__(self): 
+        super().__init__(timeout=None)
+        
+    @discord.ui.button(label="Donate a Token", style=discord.ButtonStyle.success, custom_id="donate_single_btn")
+    async def donate_single(self, interaction: discord.Interaction, button: Button):
+        # Automatically trigger and open the input popup screen layout
+        await interaction.response.send_modal(SingleTokenModal())
