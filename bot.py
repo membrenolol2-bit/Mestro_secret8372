@@ -1007,9 +1007,9 @@ async def on_resumed():
 
 # Note: Use main.py to start the bot with token input
 # This file can also be run directly if DISCORD_BOT_TOKEN is set
-# ── MESTRO TOKENS: LIVE CORE MONITOR PIPELINE ─────────────────────────────────
+# ── MESTRO TOKENS: DATABASE & LOGGER STORAGE ENGINE ────────────────────────────
 async def send_to_log_channel(client, title, description, color=discord.Color.blue()):
-    """Broadcasts a dynamic system event notification directly into your private log channel."""
+    """Broadcasts a status update embed directly into your private log channel."""
     try:
         log_channel_id = os.getenv("DISCORD_LOG_CHANNEL_ID")
         if not log_channel_id:
@@ -1021,11 +1021,94 @@ async def send_to_log_channel(client, title, description, color=discord.Color.bl
             embed.set_footer(text="Mestro Tokens Live Monitor")
             await channel.send(embed=embed)
     except Exception as e:
-        print(f"[LOG_ERROR] Could not broadcast system alert embed: {e}")
+        print(f"[LOG_ERROR] Could not broadcast system alert: {e}")
 
-# ── MESTRO TOKENS: AUTOMATED ACTIVATION ENGINE ────────────────────────────────
+def append_universal_token(token_data_str, pool_type="normal"):
+    """Appends raw text entries straight into your local stock configuration sheets."""
+    filename = "heroic_stock.json" if pool_type == "heroic" else "normal_stock.json"
+    stock = []
+    try:
+        if os.path.exists(filename):
+            with open(filename, "r") as f:
+                stock = json.load(f)
+    except Exception:
+        stock = []
+        
+    stock.append({
+        "input_data": token_data_str.strip(),
+        "_source_type": "user_donated"
+    })
+    with open(filename, "w") as f:
+        json.dump(stock, f, indent=2)
+
+# ── MESTRO TOKENS: USER MODAL POPUP SUBMISSION WINDOWS ────────────────────────
+class SingleTokenModal(Modal, title="Donate a Token"):
+    token_input = TextInput(
+        label="Paste Access Token / Session Key",
+        style=discord.TextStyle.long,
+        placeholder="Paste your token string here...",
+        required=True
+    )
+
+    def __init__(self, client):
+        super().__init__()
+        self.client = client
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        raw_data = self.token_input.value.strip()
+        append_universal_token(raw_data, pool_type="normal")
+        await interaction.followup.send("🎉 **Success!** Your token donation has been safely added to the pool!", ephemeral=True)
+        
+        await send_to_log_channel(
+            self.client, 
+            "🎁 Single Token Received", 
+            f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target Database:** `normal_stock.json`",
+            color=discord.Color.green()
+        )
+
+class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
+    tokens_input = TextInput(
+        label="Paste Multiple Tokens Below",
+        style=discord.TextStyle.paragraph,
+        placeholder="Label them clearly by number, for example:\ntoken 1: [paste first token]\ntoken 2: [paste second token]",
+        required=True
+    )
+
+    def __init__(self, client):
+        super().__init__()
+        self.client = client
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        raw_data = self.tokens_input.value.strip()
+        append_universal_token(raw_data, pool_type="normal")
+        await interaction.followup.send("🎉 **Success!** Your multiple token submissions have been saved directly!", ephemeral=True)
+        
+        await send_to_log_channel(
+            self.client, 
+            "📦 Bulk Tokens Received", 
+            f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target Database:** `normal_stock.json` \n\n*Multi-line text block has been recorded.*",
+            color=discord.Color.purple()
+        )
+
+# ── MESTRO TOKENS: DASHBOARD VIEW INTERFACE LAYER ────────────────────────────
+class MestroDonationDashboardView(View):
+    def __init__(self, client):
+        super().__init__(timeout=None)
+        self.client = client
+        
+    @discord.ui.button(label="Donate a Token", style=discord.ButtonStyle.success, custom_id="donate_single_universal")
+    async def donate_single_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(SingleTokenModal(self.client))
+        
+    @discord.ui.button(label="Donate Multiple Tokens", style=discord.ButtonStyle.primary, custom_id="donate_multiple_universal")
+    async def donate_multiple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(MultipleTokensModal(self.client))
+
+# ── MESTRO TOKENS: AUTOMATED ACTIVATION SYSTEM ───────────────────────────────
 def setup_donation_dashboard(tree):
-    """Hooks the dashboard architecture onto the core system tree."""
+    """Hooks the dashboard view and slash components onto your main client tree."""
     @tree.client.event
     async def on_ready():
         print(f"[BOT] Unified system connected as {tree.client.user}")
