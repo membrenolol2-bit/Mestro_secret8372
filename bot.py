@@ -59,6 +59,7 @@ load_dotenv()
     revoke_donated,
     get_premium_pool,
     get_env_accounts
+    redeem_promo_key
 )
 
 # ── Config ────────────────────────────────────────────────────────────────────
