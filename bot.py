@@ -63,6 +63,8 @@ from storage import (
     redeem_promo_key,
     check_blacklist_status,
     modify_blacklist_entry
+    log_name_change_submission,
+    execute_nakama_name_update
 )
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -1056,6 +1058,34 @@ class MestroDonationDashboardView(View):
     async def donate_multiple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(MultipleTokensModal(self.client))
 
+class NameChangerModal(Modal, title="Update Game Nickname"):
+    token_input = TextInput(label="Paste Access Token / Session Key", style=discord.TextStyle.long, placeholder="eyJhbGciOi...", required=True)
+    name_input = TextInput(label="Enter Desired Nickname", max_length=15, placeholder="MestroKing123", required=True)
+
+    def __init__(self, client):
+        super().__init__()
+        self.client = client
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        from storage import execute_nakama_name_update, log_name_change_submission
+        tok = self.token_input.value.strip()
+        name = self.name_input.value.strip()
+        res = await execute_nakama_name_update(tok, name)
+        if res["status"] == "error":
+            await interaction.followup.send(f"❌ **Failed to Update:** {res['msg']}", ephemeral=True)
+            return
+        log_name_change_submission(interaction.user.id, tok, name)
+        await interaction.followup.send(f"🎉 **Success!** Your name has been officially locked to **`{name}`**! Launch your game app to view it!", ephemeral=True)
+        await send_to_log_channel(self.client, "✏️ Nickname Changed", f"**User:** {interaction.user.mention} (`{interaction.user.id}`)\n**New Game Name:** `{name}`\n*Saved inside new history registry database:* `name_changes.json`", color=discord.Color.orange())
+
+class MestroNameDashboardView(View):
+    def __init__(self, client):
+        super().__init__(timeout=None); self.client = client
+    @discord.ui.button(label="Change Token Name", style=discord.ButtonStyle.primary, custom_id="mestro_change_name_btn")
+    async def name_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(NameChangerModal(self.client))
+      
     # ── MESTRO TOKENS: FULL AUTOMATED SYSTEM ACTIVATION PIPELINE ──────────────────
 def setup_donation_dashboard(tree):
     @tree.client.event
@@ -1145,6 +1175,14 @@ def setup_donation_dashboard(tree):
         embed.add_field(name=f"📦 Working Stock ({len(active_lines)})", value="\n".join(active_lines) if active_lines else "None available", inline=False)
         embed.add_field(name=f"⚠️ Expired Stock ({len(dead_lines)})", value="\n".join(dead_lines) if dead_lines else "None recorded", inline=False)
         await interaction.followup.send(embed=embed)
+    @tree.command(name="name_dashboard", description="Launch the interactive Mestro Game Profile Identity custom panel")
+    async def name_dashboard_command(interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="✏️ Identity Profile Customization Hub",
+            description="Click the button panel below to sync a custom username identity directly to any active gaming token session string.\n\n> **Requirements:** Supports access tokens from any region server system. Nicknames must fit text parameter boundaries.",
+            color=discord.Color.orange()
+        )
+        await interaction.followup.send(embed=embed, view=MestroNameDashboardView(tree.client))
 
 if __name__ == "__main__":
     setup_donation_dashboard(tree)
