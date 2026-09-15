@@ -144,16 +144,20 @@ def refresh_premium_pool_if_needed(buffer_seconds=1800):
 def refresh_env_accounts_if_needed(buffer_seconds=1800):
     pass
 
-# ── 4. FIXED: STOCK FALLBACK RETRIEVAL LAYS ───────────────────────────────────
+# ── 4. FIXED: STOCK FALLBACK RETRIEVAL ENTRIES ────────────────────────────────
 def get_public_token():
-    """Returns the primary live usable token directly from normal stock array layers."""
+    """Returns the primary live token directly from normal stock layers."""
     try:
         if os.path.exists("normal_stock.json"):
             with open("normal_stock.json", "r") as f:
                 stock = json.load(f)
                 if stock and len(stock) > 0:
-                    # Serve the first functional available token string
-                    return stock[0].get("token", stock[0].get("input_data", ""))
+                    first = stock[0]
+                    return first.get("token", first.get("input_data", ""))
     except Exception:
         pass
     return None
+
+def get_public_token_with_fallback():
+    """Satisfies line 39 requirements by pointing straight to the main stock gateway."""
+    return get_public_token()
