@@ -32,8 +32,8 @@ def seconds_until_expiry(token_str):
 def is_expired(token_str):
     return safe_seconds_until_expiry(token_str) <= 0
 async def execute_dual_host_refresh(token, refresh_token):
-    primary_host = os.getenv("NAKAMA_HOST", "https://nakamacloud.io")
-    backup_host = os.getenv("NAKAMA_HOST_BACKUP", "https://nulls.tools")
+    primary_host = os.getenv("NAKAMA_HOST", "https://animalcompany.us-east1.nakamacloud.io/v2/account/session/refresh")
+    backup_host = os.getenv("NAKAMA_HOST_BACKUP", "https://animalcompany.us-east1.nakamacloud.io")
     headers = {"Content-Type": "application/json"}
     payload = {"token": token, "refresh_token": refresh_token if refresh_token else token}
     url = f"{primary_host.rstrip('/')}/v2/account/session/refresh"
