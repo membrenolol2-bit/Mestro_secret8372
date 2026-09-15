@@ -29,8 +29,8 @@ def safe_seconds_until_expiry(token_str):
 
 # ── 2. DUAL-HOST API ROUTER ──────────────────────────────────────────────────
 async def execute_dual_host_refresh(token, refresh_token):
-    primary_host = os.getenv("NAKAMA_HOST", "https://nakamacloud.io")
-    backup_host = os.getenv("NAKAMA_HOST_BACKUP", "https://nulls.tools")
+    primary_host = os.getenv("NAKAMA_HOST", "https://animalcompany.us-east1.nakamacloud.io/v2/account/session/refresh")
+    backup_host = os.getenv("NAKAMA_HOST_BACKUP", "https://animalcompany.us-east1.nakamacloud.io")
     
     headers = {"Content-Type": "application/json"}
     payload = {
