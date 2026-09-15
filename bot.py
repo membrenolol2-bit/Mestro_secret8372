@@ -1050,24 +1050,75 @@ class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
 def setup_donation_dashboard(tree):
     @tree.client.event
     async def on_ready():
-        print(f"[BOT] Unified system connected as {tree.client.user}")
-        guild_id = os.getenv("DISCORD_GUILD_ID")
-        if guild_id:
-            try:
-                guild_object = discord.Object(id=int(guild_id)); tree.copy_global_to(guild=guild_object)
-                synced = await tree.sync(guild=guild_object); print(f"[SYNC] Guild specific commands synced instantly: {len(synced)}")
-            except Exception as e: print(f"[SYNC_ERROR] Guild tracking sync failed: {e}")
-        else:
-            try: await tree.sync(); print("[SYNC] Global application commands sent.")
-            except Exception as e: print(f"[SYNC_ERROR] Global sync failed: {e}")
-        await send_to_log_channel(tree.client, "🚀 Bot System Online", "**Mestro Tokens Dashboard** has successfully initialized.\nAll application slash commands are synced, and channel interaction loops are **Active**.", color=discord.Color.gold())
+        print(f"[BOT] Core systems connected as {tree.client.user}")
+        for guild in list(tree.client.guilds):
+            from storage import check_blacklist_status
+            if check_blacklist_status(guild.id):
+                print(f"[SECURITY] Auto-dropped blacklisted server connection node: {guild.id}")
+                await guild.leave()
+        try:
+            guild_obj = discord.Object(id=1549154833372549200)
+            tree.copy_global_to(guild=guild_obj)
+            synced = await tree.sync(guild=guild_obj)
+            print(f"[SYNC] Success! Guild specific commands forced instantly: {len(synced)}")
+        except Exception as e:
+            print(f"[SYNC_ERROR] Direct guild sync failed: {e}")
+        log_channel = tree.client.get_channel(1549154833372549200)
+        if log_channel:
+            diff_text = "```diff\nFixed:\n+ tokens\nAdded:\n- None\nRemoved:\n- None\n```"
+            embed = discord.Embed(title="🚀 System Update / Bot Online", description=f"**Mestro Tokens** has successfully redeployed and initialized command sync trees.\n\n{diff_text}", color=discord.Color.gold())
+            await log_channel.send(embed=embed)
 
-    @tree.command(name="donate_dashboard", description="Launch the customized Mestro Tokens donation menu panel")
+
+       @tree.command(name="donate_dashboard", description="Launch the customized Mestro Tokens donation menu panel")
     async def donate_dashboard(interaction: discord.Interaction):
         embed = discord.Embed(title="🎁 Mestro Tokens Donation Center", description="Click the button panels below to support active system pool stock rotations!\n\n> To submit multiple tokens at once, click **Donate Multiple Tokens** and group your lines clearly using numbers like `token 1:`, `token 2:`, etc.", color=discord.Color.blue())
         await interaction.response.send_message(embed=embed, view=MestroDonationDashboardView(tree.client))
 
     @tree.command(name="add", description="Force-add a fresh token to normal stock using only its refresh token")
+    @app_commands.describe(refresh_token="Paste the raw cryptographic refresh token string here")
+    async def add_token_command(interaction: discord.Interaction, refresh_token: str):
+        await interaction.response.defer(ephemeral=True)
+        admin_env = os.getenv("ADMIN_USER_IDS", "")
+        admin_list = [int(uid.strip()) for uid in admin_env.split(",") if uid.strip()]
+        if interaction.user.id not in admin_list:
+            await interaction.followup.send("❌ **Access Denied:** Only authorized administrators can manually supply entries.", ephemeral=True); return
+        clean_refresh = refresh_token.strip()
+        if not clean_refresh or len(clean_refresh) < 10:
+            await interaction.followup.send("❌ **Error:** Invalid refresh token formatting.", ephemeral=True); return
+        try:
+            filename = "normal_stock.json"; stock = []
+            if os.path.exists(filename):
+                with open(filename, "r") as f: stock = json.load(f)
+            stock.append({"token": clean_refresh, "refresh_token": clean_refresh, "_source_type": "admin_forced_upload"})
+            with open(filename, "w") as f: json.dump(stock, f, indent=2)
+        except Exception as file_err:
+            await interaction.followup.send(f"❌ **Database Error:** Failed to commit token string: {file_err}", ephemeral=True); return
+        await interaction.followup.send(f"🚀 **Success!** Refresh token has been appended directly into your active `normal_stock.json` pool. It will duplicate next minute!", ephemeral=True)
+        await send_to_log_channel(tree.client, "⚡ Admin Supply Action", f"**Administrator:** {interaction.user.mention} (`{interaction.user.id}`)\n**Action:** Forced custom token entry via `/add` command.\n**Target Pool:** Normal Stock Line Array (`normal_stock.json`)", color=discord.Color.red())
+    @tree.command(name="block", description="[OWNER EXCLUSIVE] Hard-blacklist a user ID or server guild ID from using this bot")
+    @app_commands.describe(target_id="Enter the raw Discord User ID or Guild Server ID string")
+    async def block_command(interaction: discord.Interaction, target_id: str):
+        if interaction.user.id != 1447021186835025921:
+            await interaction.response.send_message("❌ **Critical Security Error:** You are not authorized to invoke owner configurations.", ephemeral=True); return
+        await interaction.response.defer(ephemeral=True); from storage import modify_blacklist_entry
+        if modify_blacklist_entry(target_id, "add"):
+            await interaction.followup.send(f"🛡️ **Blacklist Updated:** ID `{target_id}` has been barred from the system.", ephemeral=True)
+            guild = tree.client.get_guild(int(target_id))
+            if guild: await guild.leave()
+        else: await interaction.followup.send("❌ Failed to update database sheet layers.", ephemeral=True)
+
+    @tree.command(name="unblock", description="[OWNER EXCLUSIVE] Remove a user ID or server guild ID from the blacklist")
+    @app_commands.describe(target_id="Enter the blocked Discord User ID or Guild Server ID string")
+    async def unblock_command(interaction: discord.Interaction, target_id: str):
+        if interaction.user.id != 1447021186835025921:
+            await interaction.response.send_message("❌ **Critical Security Error:** Access Denied.", ephemeral=True); return
+        await interaction.response.defer(ephemeral=True); from storage import modify_blacklist_entry
+        if modify_blacklist_entry(target_id, "remove"):
+            await interaction.followup.send(f"🔓 **Blacklist Cleared:** ID `{target_id}` can now use the bot again.", ephemeral=True)
+        else: await interaction.followup.send("❌ Failed to clear database record.", ephemeral=True)
+
+@tree.command(name="add", description="Force-add a fresh token to normal stock using only its refresh token")
     @app_commands.describe(refresh_token="Paste the raw cryptographic refresh token string here")
     async def add_token_command(interaction: discord.Interaction, refresh_token: str):
         await interaction.response.defer(ephemeral=True)
@@ -1147,7 +1198,7 @@ def setup_donation_dashboard(tree):
         else: await interaction.followup.send("❌ Failed to clear database record.", ephemeral=True)
 
     # ── MESTRO TOKENS: PUBLIC LIVE INVENTORY DIAGNOSTIC ─────────────────────
-    @tree.command(name="global_live_stock", description="Display a complete live operational analysis of all system pool stock")
+      @tree.command(name="global_live_stock", description="Display a complete live operational analysis of all system pool stock")
     async def global_live_stock(interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False); from storage import safe_seconds_until_expiry
         filename = "normal_stock.json"; active_lines, dead_lines = [], []
@@ -1159,38 +1210,10 @@ def setup_donation_dashboard(tree):
                     if safe_seconds_until_expiry(tok) > 0: active_lines.append(f"🟢 `Token {i}` | Active Lifetime: {int(safe_seconds_until_expiry(tok)//60)}m")
                     else: dead_lines.append(f"🔴 `Token {i}` | Session Status: Expired / Stale")
             except Exception: pass
-        
         embed = discord.Embed(title="📈 Mestro Tokens Live Stock Diagnostic", color=discord.Color.green())
         embed.add_field(name=f"📦 Working Stock ({len(active_lines)})", value="\n".join(active_lines) if active_lines else "None available", inline=False)
         embed.add_field(name=f"⚠️ Expired Stock ({len(dead_lines)})", value="\n".join(dead_lines) if dead_lines else "None recorded", inline=False)
         await interaction.followup.send(embed=embed)
-
-       @tree.client.event
-    async def on_ready():
-        print(f"[BOT] Core systems connected as {tree.client.user}")
-        
-        # 1. Automatic Server Block Security Guard Enforcement check
-        for guild in list(tree.client.guilds):
-            from storage import check_blacklist_status
-            if check_blacklist_status(guild.id):
-                print(f"[SECURITY] Auto-dropped blacklisted server connection node: {guild.id}")
-                await guild.leave()
-                
-        # FIX: Hardcodes your server ID directly so sync executes instantly bypasses propagation delays!
-        try:
-            guild_obj = discord.Object(id=1549154833372549200) # Uses your server group id anchor parameter tracks
-            tree.copy_global_to(guild=guild_obj)
-            synced = await tree.sync(guild=guild_obj)
-            print(f"[SYNC] Success! Guild specific commands forced instantly: {len(synced)}")
-        except Exception as e: 
-            print(f"[SYNC_ERROR] Direct guild sync failed: {e}")
-            
-        # 3. IMMEDIATELY dispatch raw update diff block straight to your logs channel id
-        log_channel = tree.client.get_channel(1549154833372549200)
-        if log_channel:
-            diff_text = "```diff\nFixed:\n+ tokens\nAdded:\n- None\nRemoved:\n- None\n```"
-            embed = discord.Embed(title="🚀 System Update / Bot Online", description=f"**Mestro Tokens** has successfully redeployed and initialized command sync trees.\n\n{diff_text}", color=discord.Color.gold())
-            await log_channel.send(embed=embed)
 
 if __name__ == "__main__":
     setup_donation_dashboard(tree)
