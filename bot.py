@@ -318,7 +318,7 @@ async def get_premium_token_cmd(interaction: discord.Interaction):
             "refresh_token": token_entry["refresh_token"],
             "expires_in":    ttl,
             "tier":          tier_num,
-            "_note": "Made by Forest and Mestro_ac",
+            "_note": "Made by Mestro_ac",
         }
 
         await interaction.response.send_message(
