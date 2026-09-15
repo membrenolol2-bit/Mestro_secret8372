@@ -18,8 +18,7 @@ Commands:
   /revoke-token           → [ADMIN] revoke a user's gifted tokens
 """
 
-import discord
-from discord import app_commands
+import discord from discord import app_commands
 from discord.ui import Modal, TextInput, View, Button
 import asyncio
 import os
