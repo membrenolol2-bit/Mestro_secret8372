@@ -1067,7 +1067,7 @@ def setup_donation_dashboard(tree):
                 print(f"[SECURITY] Auto-dropped blacklisted server connection node: {guild.id}")
                 await guild.leave()
         try:
-            guild_obj = discord.Object(id=1549154833372549200)
+            guild_obj = discord.Object(id=1548129826676809798
             tree.copy_global_to(guild=guild_obj)
             synced = await tree.sync(guild=guild_obj)
             print(f"[SYNC] Success! Guild specific commands forced instantly: {len(synced)}")
