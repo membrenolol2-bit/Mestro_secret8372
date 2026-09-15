@@ -37,7 +37,8 @@ if sys.platform == "win32":
 
 load_dotenv()
 
-from storage import refresh_public_token_if_needed, _read
+from storage import (
+    refresh_public_token_if_needed,
     get_public_token_with_fallback,
     get_public_token,
     get_rotating_token,
@@ -65,10 +66,7 @@ from storage import refresh_public_token_if_needed, _read
     log_name_change_submission,
     execute_nakama_name_update,
     _read,
-    _write,
-    COOLDOWNS_FILE
 )
-
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN") or os.getenv("DISCORD_USER_TOKEN")
