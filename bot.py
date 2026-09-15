@@ -36,10 +36,13 @@ if sys.platform == "win32":
 
 load_dotenv()
 
- from storage import (
-    refresh_public_token_if_needed,
-    refresh_premium_pool_if_needed
-)
+ import sys  # <-- ADD THIS AT THE VERY TOP OF LINE 1!
+import discord
+from discord import app_commands
+from discord.ui import Modal, TextInput, View, Button
+import asyncio
+import os
+import json
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN") or os.getenv("DISCORD_USER_TOKEN")
