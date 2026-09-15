@@ -73,7 +73,6 @@ def refresh_public_token_if_needed(buffer_seconds=1800):
         updated_stock = []
 
         for entry in stock:
-            # Grabs the key whether it is labeled raw, input_data, or token!
             raw_token = entry.get("input_data", entry.get("token", entry.get("refresh_token", ""))).strip()
             refresh_token = entry.get("refresh_token", raw_token).strip()
             
@@ -144,3 +143,17 @@ def refresh_premium_pool_if_needed(buffer_seconds=1800):
 
 def refresh_env_accounts_if_needed(buffer_seconds=1800):
     pass
+
+# ── 4. FIXED: STOCK FALLBACK RETRIEVAL LAYS ───────────────────────────────────
+def get_public_token():
+    """Returns the primary live usable token directly from normal stock array layers."""
+    try:
+        if os.path.exists("normal_stock.json"):
+            with open("normal_stock.json", "r") as f:
+                stock = json.load(f)
+                if stock and len(stock) > 0:
+                    # Serve the first functional available token string
+                    return stock[0].get("token", stock[0].get("input_data", ""))
+    except Exception:
+        pass
+    return None
