@@ -296,3 +296,11 @@ async def execute_nakama_name_update(token_str, desired_name):
                 return {"status": "error", "msg": err_json.get("message", "Unknown validation block")}
     except Exception as e:
         return {"status": "error", "msg": f"Network layout timed out: {e}"}
+import json
+
+def _read(filepath="data.json"):
+    try:
+        with open(filepath, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
