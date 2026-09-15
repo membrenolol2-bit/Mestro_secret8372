@@ -1046,6 +1046,36 @@ def append_universal_token(token_data_str, pool_type="normal"):
     async def donate_dashboard(interaction: discord.Interaction):
         embed = discord.Embed(title="🎁 Mestro Tokens Donation Center", description="...", color=discord.Color.blue())
         await interaction.response.send_message(embed=embed, view=MestroDonationDashboardView(tree.client))
+          @tree.client.event
+    async def on_ready():
+        print(f"[BOT] Connected as {tree.client.user}")
+        
+        # 1. Grab your server's unique ID directly from your Railway Variables setup
+        guild_id = os.getenv("DISCORD_GUILD_ID")
+        
+        if guild_id:
+            try:
+                # Force instant synchronization directly onto your test server layout bounds
+                guild_object = discord.Object(id=int(guild_id))
+                tree.copy_global_to(guild=guild_object)
+                synced = await tree.sync(guild=guild_object)
+                print(f"[SYNC] Success! Guild specific commands synced instantly: {len(synced)}")
+            except Exception as e:
+                print(f"[SYNC_ERROR] Guild tracking sync failed: {e}")
+        else:
+            # Fallback global sync lane if no specific server ID is supplied
+            try:
+                await tree.sync()
+                print("[SYNC] Global application commands sent (propagation takes up to 1 hour).")
+            except Exception as e:
+                print(f"[SYNC_ERROR] Global sync failed: {e}")
+
+        await send_to_log_channel(
+            tree.client, 
+            "🚀 Bot System Online", 
+            "**Mestro Tokens Dashboard** has successfully initialized.\nAll slash command trees have been targeted for instant server display.",
+            color=discord.Color.gold()
+        )
 
 
     # ── PASTE THE NEW COMMAND RIGHT HERE (Line 1045 - 1050) ───────────────────
