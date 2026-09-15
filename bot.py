@@ -37,7 +37,7 @@ if sys.platform == "win32":
 
 load_dotenv()
 
-from storage import (
+from storage import _read
     refresh_public_token_if_needed,
     refresh_premium_pool_if_needed,
     get_public_token_with_fallback,
