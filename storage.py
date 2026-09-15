@@ -54,11 +54,11 @@ async def execute_dual_host_refresh(token, refresh_token):
                 async with session.post(backup_url, headers=headers, json=payload, timeout=8) as response:
                     if response.status == 200:
                         return await response.json()
-    except Exception:
-        pass
+        except Exception:
+            pass
     return None
 
-# ── 3. UNIVERSAL STOCK PIPELINE ENGINE (READS ALL LABELS SMOOTHLY) ────────────
+# ── 3. UNIVERSAL STOCK PIPELINE ENGINE ────────────────────────────────────────
 def refresh_public_token_if_needed(buffer_seconds=1800):
     """Processes normal stock files, accurately translating both raw and labeled tokens."""
     try:
@@ -73,24 +73,21 @@ def refresh_public_token_if_needed(buffer_seconds=1800):
         updated_stock = []
 
         for entry in stock:
-            # FIX: Grabs the key whether it is labeled raw, input_data, or token!
+            # Grabs the key whether it is labeled raw, input_data, or token!
             raw_token = entry.get("input_data", entry.get("token", entry.get("refresh_token", ""))).strip()
             refresh_token = entry.get("refresh_token", raw_token).strip()
             
             if not raw_token:
                 continue
 
-            # Force immediate 1-minute renewal to test validity live
             if safe_seconds_until_expiry(raw_token) < buffer_seconds:
                 new_data = loop.run_until_complete(execute_dual_host_refresh(raw_token, refresh_token))
                 if new_data and "token" in new_data:
-                    # Save it back in the clean root format your bot commands expect
                     entry["token"] = new_data["token"]
                     entry["refresh_token"] = new_data["refresh_token"]
                     if "input_data" in entry:
                         entry["input_data"] = new_data["token"]
                 else:
-                    # Fallback structural protection if servers are lagging
                     entry["token"] = raw_token
                     entry["refresh_token"] = refresh_token
             else:
