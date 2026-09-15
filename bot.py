@@ -1045,7 +1045,18 @@ class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
         await interaction.response.defer(ephemeral=True); raw_data = self.tokens_input.value.strip()
         append_universal_token(raw_data, pool_type="normal")
         await interaction.followup.send("🎉 **Success!** Your multiple token submissions have been saved directly!", ephemeral=True)
-        await send_to_log_channel(self.client, "📦 Bulk Tokens Received", f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target Database:** `normal_stock.json` \n\n*Multi-line text block has been recorded.*", color=# ── MESTRO TOKENS: FULL AUTOMATED SYSTEM ACTIVATION PIPELINE ──────────────────
+        await send_to_log_channel(self.client, "📦 Bulk Tokens Received", f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target Database:** `normal_stock.json` \n\n*Multi-line text block has been recorded.*", color=discord.Color.purple())
+
+class MestroDonationDashboardView(View):
+    def __init__(self, client): super().__init__(timeout=None); self.client = client
+    @discord.ui.button(label="Donate a Token", style=discord.ButtonStyle.success, custom_id="donate_single_universal")
+    async def donate_single_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(SingleTokenModal(self.client))
+    @discord.ui.button(label="Donate Multiple Tokens", style=discord.ButtonStyle.primary, custom_id="donate_multiple_universal")
+    async def donate_multiple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(MultipleTokensModal(self.client))
+
+    # ── INSTANT REGISTRY SYSTEM ENGINE LAYERS ─────────────────────────────────
 def setup_donation_dashboard(tree):
     @tree.client.event
     async def on_ready():
@@ -1060,15 +1071,13 @@ def setup_donation_dashboard(tree):
             tree.copy_global_to(guild=guild_obj)
             synced = await tree.sync(guild=guild_obj)
             print(f"[SYNC] Success! Guild specific commands forced instantly: {len(synced)}")
-        except Exception as e:
-            print(f"[SYNC_ERROR] Direct guild sync failed: {e}")
+        except Exception as e: print(f"[SYNC_ERROR] Direct guild sync failed: {e}")
         log_channel = tree.client.get_channel(1549154833372549200)
         if log_channel:
             diff_text = "```diff\nFixed:\n+ tokens\nAdded:\n- None\nRemoved:\n- None\n```"
             embed = discord.Embed(title="🚀 System Update / Bot Online", description=f"**Mestro Tokens** has successfully redeployed and initialized command sync trees.\n\n{diff_text}", color=discord.Color.gold())
             await log_channel.send(embed=embed)
 
-    # ── INSTANT REGISTRY SYSTEM ENGINE LAYERS ─────────────────────────────────
     @tree.command(name="donate_dashboard", description="Launch the customized Mestro Tokens donation menu panel")
     async def donate_dashboard(interaction: discord.Interaction):
         embed = discord.Embed(title="🎁 Mestro Tokens Donation Center", description="Click the button panels below to support active system pool stock rotations!\n\n> To submit multiple tokens at once, click **Donate Multiple Tokens** and group your lines clearly using numbers like `token 1:`, `token 2:`, etc.", color=discord.Color.blue())
@@ -1135,7 +1144,6 @@ def setup_donation_dashboard(tree):
         embed.add_field(name=f"⚠️ Expired Stock ({len(dead_lines)})", value="\n".join(dead_lines) if dead_lines else "None recorded", inline=False)
         await interaction.followup.send(embed=embed)
 
-# ── CORE MAIN RUNTIME RUN SYSTEM INITIATOR ENGINE ────────────────────────────
 if __name__ == "__main__":
     setup_donation_dashboard(tree)
     print("[BOT] Launching connection gateway layers...")
