@@ -1165,7 +1165,7 @@ def setup_donation_dashboard(tree):
         embed.add_field(name=f"⚠️ Expired Stock ({len(dead_lines)})", value="\n".join(dead_lines) if dead_lines else "None recorded", inline=False)
         await interaction.followup.send(embed=embed)
 
-    @tree.client.event
+       @tree.client.event
     async def on_ready():
         print(f"[BOT] Core systems connected as {tree.client.user}")
         
@@ -1176,13 +1176,14 @@ def setup_donation_dashboard(tree):
                 print(f"[SECURITY] Auto-dropped blacklisted server connection node: {guild.id}")
                 await guild.leave()
                 
-        # 2. Sync configurations instantly directly to target testing guild parameters
-        guild_id = os.getenv("DISCORD_GUILD_ID")
-        if guild_id:
-            try:
-                guild_obj = discord.Object(id=int(guild_id)); tree.copy_global_to(guild=guild_obj)
-                await tree.sync(guild=guild_obj)
-            except Exception: pass
+        # FIX: Hardcodes your server ID directly so sync executes instantly bypasses propagation delays!
+        try:
+            guild_obj = discord.Object(id=1549154833372549200) # Uses your server group id anchor parameter tracks
+            tree.copy_global_to(guild=guild_obj)
+            synced = await tree.sync(guild=guild_obj)
+            print(f"[SYNC] Success! Guild specific commands forced instantly: {len(synced)}")
+        except Exception as e: 
+            print(f"[SYNC_ERROR] Direct guild sync failed: {e}")
             
         # 3. IMMEDIATELY dispatch raw update diff block straight to your logs channel id
         log_channel = tree.client.get_channel(1549154833372549200)
