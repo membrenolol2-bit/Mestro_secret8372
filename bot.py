@@ -1138,17 +1138,27 @@ def setup_donation_dashboard(tree):
         await interaction.followup.send(f"🚀 **Success!** Refresh token has been appended directly into your active `normal_stock.json` pool. It will duplicate next minute!", ephemeral=True)
         await send_to_log_channel(tree.client, "⚡ Admin Supply Action", f"**Administrator:** {interaction.user.mention} (`{interaction.user.id}`)\n**Action:** Forced custom token entry via `/add` command.\n**Target Pool:** Normal Stock Line Array (`normal_stock.json`)", color=discord.Color.red())
 
-    @tree.command(name="block", description="[OWNER EXCLUSIVE] Hard-blacklist a user ID or server guild ID from using this bot")
+       @tree.command(name="block", description="[OWNER EXCLUSIVE] Hard-blacklist a user ID or server guild ID from using this bot")
     @app_commands.describe(target_id="Enter the raw Discord User ID or Guild Server ID string")
     async def block_command(interaction: discord.Interaction, target_id: str):
         if interaction.user.id != 1447021186835025921:
             await interaction.response.send_message("❌ **Critical Security Error:** You are not authorized to invoke owner configurations.", ephemeral=True); return
         await interaction.response.defer(ephemeral=True); from storage import modify_blacklist_entry
+        
         if modify_blacklist_entry(target_id, "add"):
             await interaction.followup.send(f"🛡️ **Blacklist Updated:** ID `{target_id}` has been barred from the system.", ephemeral=True)
-            guild = tree.client.get_guild(int(target_id))
-            if guild: await guild.leave()
-        else: await interaction.followup.send("❌ Failed to update database sheet layers.", ephemeral=True)
+            
+            # FIX: Instantly scan current server connection memory pools and leave on the spot!
+            try:
+                target_guild_id = int(target_id.strip())
+                active_guild = tree.client.get_guild(target_guild_id)
+                if active_guild:
+                    print(f"[SECURITY] Instantly evicting bot from blocked guild connection: {active_guild.name}")
+                    await active_guild.leave()  # Forces immediate server exit!
+            except Exception:
+                pass
+        else:
+            await interaction.followup.send("❌ Failed to update database sheet layers.", ephemeral=True)
 
     @tree.command(name="unblock", description="[OWNER EXCLUSIVE] Remove a user ID or server guild ID from the blacklist")
     @app_commands.describe(target_id="Enter the blocked Discord User ID or Guild Server ID string")
