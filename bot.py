@@ -1056,7 +1056,7 @@ class MestroDonationDashboardView(View):
     async def donate_multiple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(MultipleTokensModal(self.client))
 
-    # ── INSTANT REGISTRY SYSTEM ENGINE LAYERS ─────────────────────────────────
+    # ── MESTRO TOKENS: FULL AUTOMATED SYSTEM ACTIVATION PIPELINE ──────────────────
 def setup_donation_dashboard(tree):
     @tree.client.event
     async def on_ready():
@@ -1067,11 +1067,13 @@ def setup_donation_dashboard(tree):
                 print(f"[SECURITY] Auto-dropped blacklisted server connection node: {guild.id}")
                 await guild.leave()
         try:
-            guild_obj = discord.Object(id=1548129826676809798
+            # FIX: Double-check that your server ID is nested cleanly inside the double parenthesis layers
+            guild_obj = discord.Object(id=1549154833372549200)
             tree.copy_global_to(guild=guild_obj)
             synced = await tree.sync(guild=guild_obj)
             print(f"[SYNC] Success! Guild specific commands forced instantly: {len(synced)}")
-        except Exception as e: print(f"[SYNC_ERROR] Direct guild sync failed: {e}")
+        except Exception as e:
+            print(f"[SYNC_ERROR] Direct guild sync failed: {e}")
         log_channel = tree.client.get_channel(1549154833372549200)
         if log_channel:
             diff_text = "```diff\nFixed:\n+ tokens\nAdded:\n- None\nRemoved:\n- None\n```"
