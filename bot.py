@@ -1008,7 +1008,7 @@ async def on_resumed():
 
 # Note: Use main.py to start the bot with token input
 # This file can also be run directly if DISCORD_BOT_TOKEN is set
-# ── 1. DATABASE & MONITOR STORAGE PIPELINES ──────────────────────────────────
+## ── MESTRO TOKENS: DATABASE & MONITOR STORAGE ENGINE ────────────────────────────
 async def send_to_log_channel(client, title, description, color=discord.Color.blue()):
     """Broadcasts a status update embed directly into your private log channel."""
     try:
@@ -1041,94 +1041,8 @@ def append_universal_token(token_data_str, pool_type="normal"):
     })
     with open(filename, "w") as f:
         json.dump(stock, f, indent=2)
-    # ... (Your existing donate_dashboard command code is sitting here) ...
-    @tree.command(name="donate_dashboard", description="Launch the customized Mestro Tokens donation menu panel")
-    async def donate_dashboard(interaction: discord.Interaction):
-        embed = discord.Embed(title="🎁 Mestro Tokens Donation Center", description="...", color=discord.Color.blue())
-        await interaction.response.send_message(embed=embed, view=MestroDonationDashboardView(tree.client))
-          @tree.client.event
-    async def on_ready():
-        print(f"[BOT] Connected as {tree.client.user}")
-        
-        # 1. Grab your server's unique ID directly from your Railway Variables setup
-        guild_id = os.getenv("DISCORD_GUILD_ID")
-        
-        if guild_id:
-            try:
-                # Force instant synchronization directly onto your test server layout bounds
-                guild_object = discord.Object(id=int(guild_id))
-                tree.copy_global_to(guild=guild_object)
-                synced = await tree.sync(guild=guild_object)
-                print(f"[SYNC] Success! Guild specific commands synced instantly: {len(synced)}")
-            except Exception as e:
-                print(f"[SYNC_ERROR] Guild tracking sync failed: {e}")
-        else:
-            # Fallback global sync lane if no specific server ID is supplied
-            try:
-                await tree.sync()
-                print("[SYNC] Global application commands sent (propagation takes up to 1 hour).")
-            except Exception as e:
-                print(f"[SYNC_ERROR] Global sync failed: {e}")
 
-        await send_to_log_channel(
-            tree.client, 
-            "🚀 Bot System Online", 
-            "**Mestro Tokens Dashboard** has successfully initialized.\nAll slash command trees have been targeted for instant server display.",
-            color=discord.Color.gold()
-        )
-
-
-    # ── PASTE THE NEW COMMAND RIGHT HERE (Line 1045 - 1050) ───────────────────
-    @tree.command(name="add", description="Force-add a fresh token to normal stock using only its refresh token")
-    @app_commands.describe(refresh_token="Paste the raw cryptographic refresh token string here")
-    async def add_token_command(interaction: discord.Interaction, refresh_token: str):
-        await interaction.response.defer(ephemeral=True)
-        
-        # 1. Permission Check: Verify administrator status from Railway configs
-        admin_env = os.getenv("ADMIN_USER_IDS", "")
-        admin_list = [int(uid.strip()) for uid in admin_env.split(",") if uid.strip()]
-        
-        if interaction.user.id not in admin_list:
-            await interaction.followup.send("❌ **Access Denied:** Only authorized administrators can manually supply database entries.", ephemeral=True)
-            return
-
-        clean_refresh = refresh_token.strip()
-        if not clean_refresh or len(clean_refresh) < 10:
-            await interaction.followup.send("❌ **Error:** Invalid refresh token formatting. Please verify string text characters.", ephemeral=True)
-            return
-
-        # 2. Database Processing: Write the string data out into your stock sheets
-        try:
-            filename = "normal_stock.json"
-            stock = []
-            if os.path.exists(filename):
-                with open(filename, "r") as f:
-                    stock = json.load(f)
-            
-            stock.append({
-                "token": clean_refresh, 
-                "refresh_token": clean_refresh,
-                "_source_type": "admin_forced_upload"
-            })
-            
-            with open(filename, "w") as f:
-                json.dump(stock, f, indent=2)
-                
-        except Exception as file_err:
-            await interaction.followup.send(f"❌ **Database Error:** Failed to commit token string: {file_err}", ephemeral=True)
-            return
-
-        # 3. Notification Routing: Send confirmations and log updates
-        await interaction.followup.send(f"🚀 **Success!** Refresh token has been appended directly into your active `normal_stock.json` pool. It will duplicate next minute!", ephemeral=True)
-        
-        await send_to_log_channel(
-            tree.client,
-            "⚡ Admin Supply Action",
-            f"**Administrator:** {interaction.user.mention} (`{interaction.user.id}`)\n**Action:** Forced custom token entry via `/add` command.\n**Target Pool:** Normal Stock Line Array (`normal_stock.json`)",
-            color=discord.Color.red()
-        )
-
-# ── 2. PLACED FIRST: THE MODAL POPUP WINDOW CLASSES ──────────────────────────
+# ── MESTRO TOKENS: USER MODAL POPUP SUBMISSION WINDOWS ────────────────────────
 class SingleTokenModal(Modal, title="Donate a Token"):
     token_input = TextInput(
         label="Paste Access Token / Session Key",
@@ -1158,7 +1072,7 @@ class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
     tokens_input = TextInput(
         label="Paste Multiple Tokens Below",
         style=discord.TextStyle.paragraph,
-        placeholder="token 1: [paste first token]\ntoken 2: [paste second token]", # <-- SHORTENED PERFECTLY!
+        placeholder="token 1: [paste first token]\ntoken 2: [paste second token]",
         required=True
     )
 
@@ -1179,7 +1093,7 @@ class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
             color=discord.Color.purple()
         )
 
-# ── 3. PLACED SECOND: THE INTERFACE BUTTON VIEWS (READS MODALS ABOVE) ────────
+# ── MESTRO TOKENS: DASHBOARD VIEW INTERFACE LAYER ────────────────────────────
 class MestroDonationDashboardView(View):
     def __init__(self, client):
         super().__init__(timeout=None)
@@ -1193,17 +1107,28 @@ class MestroDonationDashboardView(View):
     async def donate_multiple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(MultipleTokensModal(self.client))
 
-# ── 4. PLACED THIRD: ACTIVATION LOOPS & COMMAND HANDLERS ────────────────────
+# ── MESTRO TOKENS: AUTOMATED ACTIVATION SYSTEM ───────────────────────────────
 def setup_donation_dashboard(tree):
-    """Hooks the dashboard tree structure into the running client."""
+    """Hooks the dashboard view and slash components onto your main client tree."""
     @tree.client.event
     async def on_ready():
         print(f"[BOT] Unified system connected as {tree.client.user}")
-        try:
-            await tree.sync()
-            print("[SYNC] Application commands synced with Discord!")
-        except Exception as e:
-            print(f"[SYNC_ERROR] Command registry sync failed: {e}")
+        
+        guild_id = os.getenv("DISCORD_GUILD_ID")
+        if guild_id:
+            try:
+                guild_object = discord.Object(id=int(guild_id))
+                tree.copy_global_to(guild=guild_object)
+                synced = await tree.sync(guild=guild_object)
+                print(f"[SYNC] Guild specific commands synced instantly: {len(synced)}")
+            except Exception as e:
+                print(f"[SYNC_ERROR] Guild tracking sync failed: {e}")
+        else:
+            try:
+                await tree.sync()
+                print("[SYNC] Global application commands sent.")
+            except Exception as e:
+                print(f"[SYNC_ERROR] Global sync failed: {e}")
 
         await send_to_log_channel(
             tree.client, 
@@ -1221,7 +1146,52 @@ def setup_donation_dashboard(tree):
         )
         await interaction.response.send_message(embed=embed, view=MestroDonationDashboardView(tree.client))
 
-# ── 5. RUNTIME INITIATOR ENGINE ───────────────────────────────────────────────
+    @tree.command(name="add", description="Force-add a fresh token to normal stock using only its refresh token")
+    @app_commands.describe(refresh_token="Paste the raw cryptographic refresh token string here")
+    async def add_token_command(interaction: discord.Interaction, refresh_token: str):
+        await interaction.response.defer(ephemeral=True)
+        
+        admin_env = os.getenv("ADMIN_USER_IDS", "")
+        admin_list = [int(uid.strip()) for uid in admin_env.split(",") if uid.strip()]
+        
+        if interaction.user.id not in admin_list:
+            await interaction.followup.send("❌ **Access Denied:** Only authorized administrators can manually supply entries.", ephemeral=True)
+            return
+
+        clean_refresh = refresh_token.strip()
+        if not clean_refresh or len(clean_refresh) < 10:
+            await interaction.followup.send("❌ **Error:** Invalid refresh token formatting.", ephemeral=True)
+            return
+
+        try:
+            filename = "normal_stock.json"
+            stock = []
+            if os.path.exists(filename):
+                with open(filename, "r") as f:
+                    stock = json.load(f)
+            
+            stock.append({
+                "token": clean_refresh, 
+                "refresh_token": clean_refresh,
+                "_source_type": "admin_forced_upload"
+            })
+            with open(filename, "w") as f:
+                json.dump(stock, f, indent=2)
+                
+        except Exception as file_err:
+            await interaction.followup.send(f"❌ **Database Error:** Failed to commit token string: {file_err}", ephemeral=True)
+            return
+
+        await interaction.followup.send(f"🚀 **Success!** Refresh token has been appended directly into your active `normal_stock.json` pool. It will duplicate next minute!", ephemeral=True)
+        
+        await send_to_log_channel(
+            tree.client,
+            "⚡ Admin Supply Action",
+            f"**Administrator:** {interaction.user.mention} (`{interaction.user.id}`)\n**Action:** Forced custom token entry via `/add` command.\n**Target Pool:** Normal Stock Line Array (`normal_stock.json`)",
+            color=discord.Color.red()
+        )
+
+# ── MAIN INITIATOR EXECUTION LAYER ────────────────────────────────────────────
 if __name__ == "__main__":
     setup_donation_dashboard(tree)
     print("[BOT] Launching connection gateway layers...")
