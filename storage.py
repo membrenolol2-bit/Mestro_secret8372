@@ -211,3 +211,35 @@ def reset_all_cooldowns(): return 0
 def set_permanent_cooldown(user_id, pool_name): pass
 def increment_premium_uses(user_id): pass
 def get_env_accounts(): return []
+
+def redeem_promo_key(key_str, user_id):
+    """Checks, uses, and marks a generated promo key string inside the database layers."""
+    filename = "promo_keys.json"
+    try:
+        if not os.path.exists(filename):
+            return {"status": "error", "msg": "❌ Invalid key: No active promo keys exist."}
+        with open(filename, "r") as f:
+            keys = json.load(f)
+        
+        target_key = key_str.strip().upper()
+        if target_key not in keys:
+            return {"status": "error", "msg": "❌ Invalid key: That code does not exist."}
+            
+        key_data = keys[target_key]
+        if key_data["uses"] <= 0:
+            return {"status": "error", "msg": "❌ Expired: This key has already reached its usage limit."}
+            
+        if str(user_id) in key_data["claimed_by"]:
+            return {"status": "error", "msg": "❌ Already Claimed: You have already redeemed this code!"}
+
+        # Deduct a use and record the user's ID tracking metric
+        key_data["uses"] -= 1
+        key_data["claimed_by"].append(str(user_id))
+        
+        with open(filename, "w") as f:
+            json.dump(keys, f, indent=2)
+            
+        return {"status": "success", "role_id": key_data["role_id"], "remaining": key_data["uses"]}
+    except Exception as e:
+        return {"status": "error", "msg": f"❌ Database error: {e}"}
+
