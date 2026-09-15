@@ -1098,13 +1098,11 @@ def setup_donation_dashboard(tree):
                 print(f"[SECURITY] Auto-dropped blacklisted server connection node: {guild.id}")
                 await guild.leave()
         try:
-            # FIX: Double-check that your server ID is nested cleanly inside the double parenthesis layers
-            guild_obj = discord.Object(id=1548129826676809798)
+            guild_obj = discord.Object(id=1549154833372549200)
             tree.copy_global_to(guild=guild_obj)
             synced = await tree.sync(guild=guild_obj)
             print(f"[SYNC] Success! Guild specific commands forced instantly: {len(synced)}")
-        except Exception as e:
-            print(f"[SYNC_ERROR] Direct guild sync failed: {e}")
+        except Exception as e: print(f"[SYNC_ERROR] Direct guild sync failed: {e}")
         log_channel = tree.client.get_channel(1549154833372549200)
         if log_channel:
             diff_text = "```diff\nFixed:\n+ tokens\nAdded:\n- None\nRemoved:\n- None\n```"
@@ -1138,27 +1136,20 @@ def setup_donation_dashboard(tree):
         await interaction.followup.send(f"🚀 **Success!** Refresh token has been appended directly into your active `normal_stock.json` pool. It will duplicate next minute!", ephemeral=True)
         await send_to_log_channel(tree.client, "⚡ Admin Supply Action", f"**Administrator:** {interaction.user.mention} (`{interaction.user.id}`)\n**Action:** Forced custom token entry via `/add` command.\n**Target Pool:** Normal Stock Line Array (`normal_stock.json`)", color=discord.Color.red())
 
-       @tree.command(name="block", description="[OWNER EXCLUSIVE] Hard-blacklist a user ID or server guild ID from using this bot")
+    @tree.command(name="block", description="[OWNER EXCLUSIVE] Hard-blacklist a user ID or server guild ID from using this bot")
     @app_commands.describe(target_id="Enter the raw Discord User ID or Guild Server ID string")
     async def block_command(interaction: discord.Interaction, target_id: str):
         if interaction.user.id != 1447021186835025921:
             await interaction.response.send_message("❌ **Critical Security Error:** You are not authorized to invoke owner configurations.", ephemeral=True); return
         await interaction.response.defer(ephemeral=True); from storage import modify_blacklist_entry
-        
         if modify_blacklist_entry(target_id, "add"):
             await interaction.followup.send(f"🛡️ **Blacklist Updated:** ID `{target_id}` has been barred from the system.", ephemeral=True)
-            
-            # FIX: Instantly scan current server connection memory pools and leave on the spot!
             try:
                 target_guild_id = int(target_id.strip())
                 active_guild = tree.client.get_guild(target_guild_id)
-                if active_guild:
-                    print(f"[SECURITY] Instantly evicting bot from blocked guild connection: {active_guild.name}")
-                    await active_guild.leave()  # Forces immediate server exit!
-            except Exception:
-                pass
-        else:
-            await interaction.followup.send("❌ Failed to update database sheet layers.", ephemeral=True)
+                if active_guild: await active_guild.leave()
+            except Exception: pass
+        else: await interaction.followup.send("❌ Failed to update database layers.", ephemeral=True)
 
     @tree.command(name="unblock", description="[OWNER EXCLUSIVE] Remove a user ID or server guild ID from the blacklist")
     @app_commands.describe(target_id="Enter the blocked Discord User ID or Guild Server ID string")
@@ -1186,15 +1177,13 @@ def setup_donation_dashboard(tree):
         embed.add_field(name=f"📦 Working Stock ({len(active_lines)})", value="\n".join(active_lines) if active_lines else "None available", inline=False)
         embed.add_field(name=f"⚠️ Expired Stock ({len(dead_lines)})", value="\n".join(dead_lines) if dead_lines else "None recorded", inline=False)
         await interaction.followup.send(embed=embed)
+
     @tree.command(name="name_dashboard", description="Launch the interactive Mestro Game Profile Identity custom panel")
     async def name_dashboard_command(interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="✏️ Identity Profile Customization Hub",
-            description="Click the button panel below to sync a custom username identity directly to any active gaming token session string.\n\n> **Requirements:** Supports access tokens from any region server system. Nicknames must fit text parameter boundaries.",
-            color=discord.Color.orange()
-        )
-        await interaction.followup.send(embed=embed, view=MestroNameDashboardView(tree.client))
+        embed = discord.Embed(title="✏️ Identity Profile Customization Hub", description="Click the button panel below to sync a custom username identity directly to any active gaming token session string.\n\n> **Requirements:** Supports access tokens from any region server system.", color=discord.Color.orange())
+        await interaction.response.send_message(embed=embed, view=MestroNameDashboardView(tree.client))
 
+# ── CORE MAIN RUNTIME RUN SYSTEM INITIATOR ENGINE ────────────────────────────
 if __name__ == "__main__":
     setup_donation_dashboard(tree)
     print("[BOT] Launching connection gateway layers...")
