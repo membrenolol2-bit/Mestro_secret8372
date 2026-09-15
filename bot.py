@@ -1188,3 +1188,19 @@ if __name__ == "__main__":
     setup_donation_dashboard(tree)
     print("[BOT] Launching connection gateway layers...")
     client.run(BOT_TOKEN)
+    # ── MESTRO TOKENS: AUTOMATED HIGH-SPEED REFRESH LOOP PIPELINE ─────────────
+    @tasks.loop(seconds=10)
+    async def token_refresh_loop():
+        """Automatically scans your database registries every 10 seconds."""
+        try:
+            from storage import refresh_public_token_if_needed, refresh_premium_pool_if_needed
+            refresh_public_token_if_needed()
+            refresh_premium_pool_if_needed()
+        except Exception as e:
+            print(f"[LOOP_ERROR] Automated stock rotation failed: {e}")
+
+    # Starts your background cycle the exact second the event loop turns ready
+    @token_refresh_loop.before_loop
+    async def before_token_refresh():
+        await tree.client.wait_until_ready()
+        token_refresh_loop.start()
