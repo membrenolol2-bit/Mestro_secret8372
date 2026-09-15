@@ -16,7 +16,7 @@ def safe_seconds_until_expiry(token_str):
 
 async def execute_nakama_refresh(token, refresh_token):
     """Sends a high-speed POST payload to the Nakama server to rotate credentials."""
-    primary_host = os.getenv("NAKAMA_HOST", "https://animalcompany.us-east1.nakamacloud.io")
+    primary_host = os.getenv("NAKAMA_HOST", "https://animalcompany.us-east1.nakamacloud.io/v2/account/session/refresh")
     headers = {"Content-Type": "application/json"}
     payload = {
         "token": token,
