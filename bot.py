@@ -36,34 +36,9 @@ if sys.platform == "win32":
 
 load_dotenv()
 
-from storage import (
-    get_public_token,
-    get_public_token_with_fallback,
-    check_cooldown,
-    set_cooldown,
-    format_time,
-    seconds_until_expiry,
-    add_premium_token,
-    pop_premium_token,
-    premium_pool_status,
-    is_premium_user,
-    add_premium_user,
-    increment_premium_uses,
-    global_status,
-    add_donated,
-    get_donated,
-    revoke_donated,
-    is_expired,
-    _read,
-    _write,
-    COOLDOWNS_FILE,
-    get_premium_pool,
-    get_env_accounts,
-    reset_all_cooldowns,
-    set_permanent_cooldown,
-    remove_permanent_cooldown,
-    get_rotating_token,
-    get_public_token_raw,
+ from storage import (
+    refresh_public_token_if_needed,
+    refresh_premium_pool_if_needed
 )
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -501,7 +476,7 @@ async def view_tokens_cmd(interaction: discord.Interaction):
             "public_token": public_token if public_token else "None or expired",
             "premium_pool": premium_pool,
             "env_accounts": env_accounts,
-            "_note": "Made by Forest and Mestro_ac",
+            "_note": "Made by Mestro_ac",
         }
 
         json_bytes = json.dumps(payload, indent=2).encode("utf-8")
