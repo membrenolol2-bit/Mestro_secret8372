@@ -58,7 +58,7 @@ from storage import (
     set_cooldown,
     revoke_donated,
     get_premium_pool,
-        get_env_accounts
+    get_env_accounts,
     redeem_promo_key
 )
 
