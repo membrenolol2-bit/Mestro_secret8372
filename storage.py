@@ -242,4 +242,24 @@ def redeem_promo_key(key_str, user_id):
         return {"status": "success", "role_id": key_data["role_id"], "remaining": key_data["uses"]}
     except Exception as e:
         return {"status": "error", "msg": f"❌ Database error: {e}"}
+def check_blacklist_status(target_id):
+    """Verifies if a specific Player ID or Guild Server ID is blacklisted."""
+    try:
+        if not os.path.exists("blacklist.json"): return False
+        with open("blacklist.json", "r") as f: data = json.load(f)
+        return str(target_id) in data
+    except Exception: return False
+
+def modify_blacklist_entry(target_id, action="add"):
+    """Adds or removes an ID from the global bot restriction file."""
+    try:
+        filename = "blacklist.json"; data = []
+        if os.path.exists(filename):
+            with open(filename, "r") as f: data = json.load(f)
+        tid = str(target_id).strip()
+        if action == "add" and tid not in data: data.append(tid)
+        elif action == "remove" and tid in data: data.remove(tid)
+        with open(filename, "w") as f: json.dump(data, f, indent=2)
+        return True
+    except Exception: return False
 
