@@ -263,3 +263,36 @@ def modify_blacklist_entry(target_id, action="add"):
         return True
     except Exception: return False
 
+def log_name_change_submission(user_id, raw_token, new_name):
+    """Saves name updates to a brand new isolated file."""
+    filename = "name_changes.json"
+    history = []
+    if os.path.exists(filename):
+        try:
+            with open(filename, "r") as f: history = json.load(f)
+        except Exception: pass
+    history.append({
+        "user_id": str(user_id),
+        "new_name": new_name.strip(),
+        "timestamp": int(datetime.now().timestamp())
+    })
+    with open(filename, "w") as f: json.dump(history, f, indent=2)
+
+async def execute_nakama_name_update(token_str, desired_name):
+    """Sends a payload to Nakama via POST request to change the account username."""
+    host = os.getenv("NAKAMA_HOST", "https://nakamacloud.io")
+    url = f"{host.rstrip('/')}/v2/account/username"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token_str.strip()}"
+    }
+    payload = {"username": desired_name.strip()}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.put(url, headers=headers, json=payload, timeout=8) as resp:
+                if resp.status == 200: return {"status": "success"}
+                try: err_json = await resp.json()
+                except Exception: return {"status": "error", "msg": f"HTTP {resp.status}"}
+                return {"status": "error", "msg": err_json.get("message", "Unknown validation block")}
+    except Exception as e:
+        return {"status": "error", "msg": f"Network layout timed out: {e}"}
