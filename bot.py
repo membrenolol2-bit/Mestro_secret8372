@@ -1004,190 +1004,121 @@ async def on_resumed():
 
 # Note: Use main.py to start the bot with token input
 # This file can also be run directly if DISCORD_BOT_TOKEN is set
-## ── MESTRO TOKENS: DATABASE & MONITOR STORAGE ENGINE ────────────────────────────
+# ── MESTRO TOKENS: DATABASE & LOGGER STORAGE ENGINE ────────────────────────────
 async def send_to_log_channel(client, title, description, color=discord.Color.blue()):
-    """Broadcasts a status update embed directly into your private log channel."""
     try:
         log_channel_id = os.getenv("DISCORD_LOG_CHANNEL_ID")
-        if not log_channel_id:
-            return
-            
+        if not log_channel_id: return
         channel = client.get_channel(int(log_channel_id))
         if channel:
             embed = discord.Embed(title=title, description=description, color=color)
             embed.set_footer(text="Mestro Tokens Live Monitor")
             await channel.send(embed=embed)
-    except Exception as e:
-        print(f"[LOG_ERROR] Could not broadcast system alert: {e}")
+    except Exception as e: print(f"[LOG_ERROR] Alert failed: {e}")
 
 def append_universal_token(token_data_str, pool_type="normal"):
-    """Appends raw text entries straight into your local stock configuration sheets."""
     filename = "heroic_stock.json" if pool_type == "heroic" else "normal_stock.json"
     stock = []
     try:
         if os.path.exists(filename):
-            with open(filename, "r") as f:
-                stock = json.load(f)
-    except Exception:
-        stock = []
-        
-    stock.append({
-        "input_data": token_data_str.strip(),
-        "_source_type": "user_donated"
-    })
-    with open(filename, "w") as f:
-        json.dump(stock, f, indent=2)
-
+            with open(filename, "r") as f: stock = json.load(f)
+    except Exception: pass
+    stock.append({"input_data": token_data_str.strip(), "_source_type": "user_donated"})
+    with open(filename, "w") as f: json.dump(stock, f, indent=2)
 # ── MESTRO TOKENS: USER MODAL POPUP SUBMISSION WINDOWS ────────────────────────
 class SingleTokenModal(Modal, title="Donate a Token"):
-    token_input = TextInput(
-        label="Paste Access Token / Session Key",
-        style=discord.TextStyle.long,
-        placeholder="Paste your token string here...",
-        required=True
-    )
-
-    def __init__(self, client):
-        super().__init__()
-        self.client = client
-
+    token_input = TextInput(label="Paste Access Token / Session Key", style=discord.TextStyle.long, placeholder="Paste your token string here...", required=True)
+    def __init__(self, client): super().__init__(); self.client = client
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        raw_data = self.token_input.value.strip()
+        await interaction.response.defer(ephemeral=True); raw_data = self.token_input.value.strip()
         append_universal_token(raw_data, pool_type="normal")
         await interaction.followup.send("🎉 **Success!** Your token donation has been safely added to the pool!", ephemeral=True)
-        
-        await send_to_log_channel(
-            self.client, 
-            "🎁 Single Token Received", 
-            f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target Database:** `normal_stock.json`",
-            color=discord.Color.green()
-        )
+        await send_to_log_channel(self.client, "🎁 Single Token Received", f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target Database:** `normal_stock.json`", color=discord.Color.green())
 
 class MultipleTokensModal(Modal, title="Donate Multiple Tokens"):
-    tokens_input = TextInput(
-        label="Paste Multiple Tokens Below",
-        style=discord.TextStyle.paragraph,
-        placeholder="token 1: [paste first token]\ntoken 2: [paste second token]",
-        required=True
-    )
-
-    def __init__(self, client):
-        super().__init__()
-        self.client = client
-
+    tokens_input = TextInput(label="Paste Multiple Tokens Below", style=discord.TextStyle.paragraph, placeholder="token 1: [paste first token]\ntoken 2: [paste second token]", required=True)
+    def __init__(self, client): super().__init__(); self.client = client
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        raw_data = self.tokens_input.value.strip()
+        await interaction.response.defer(ephemeral=True); raw_data = self.tokens_input.value.strip()
         append_universal_token(raw_data, pool_type="normal")
         await interaction.followup.send("🎉 **Success!** Your multiple token submissions have been saved directly!", ephemeral=True)
-        
-        await send_to_log_channel(
-            self.client, 
-            "📦 Bulk Tokens Received", 
-            f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target Database:** `normal_stock.json` \n\n*Multi-line text block has been recorded.*",
-            color=discord.Color.purple()
-        )
-
-# ── MESTRO TOKENS: DASHBOARD VIEW INTERFACE LAYER ────────────────────────────
-class MestroDonationDashboardView(View):
-    def __init__(self, client):
-        super().__init__(timeout=None)
-        self.client = client
-        
-    @discord.ui.button(label="Donate a Token", style=discord.ButtonStyle.success, custom_id="donate_single_universal")
-    async def donate_single_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(SingleTokenModal(self.client))
-        
-    @discord.ui.button(label="Donate Multiple Tokens", style=discord.ButtonStyle.primary, custom_id="donate_multiple_universal")
-    async def donate_multiple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(MultipleTokensModal(self.client))
-
+        await send_to_log_channel(self.client, "📦 Bulk Tokens Received", f"**Donor:** {interaction.user.mention} (`{interaction.user.id}`)\n**Target Database:** `normal_stock.json` \n\n*Multi-line text block has been recorded.*", color=discord.Color.purple())
 # ── MESTRO TOKENS: AUTOMATED ACTIVATION SYSTEM ───────────────────────────────
 def setup_donation_dashboard(tree):
-    """Hooks the dashboard view and slash components onto your main client tree."""
     @tree.client.event
     async def on_ready():
         print(f"[BOT] Unified system connected as {tree.client.user}")
-        
         guild_id = os.getenv("DISCORD_GUILD_ID")
         if guild_id:
             try:
-                guild_object = discord.Object(id=int(guild_id))
-                tree.copy_global_to(guild=guild_object)
-                synced = await tree.sync(guild=guild_object)
-                print(f"[SYNC] Guild specific commands synced instantly: {len(synced)}")
-            except Exception as e:
-                print(f"[SYNC_ERROR] Guild tracking sync failed: {e}")
+                guild_object = discord.Object(id=int(guild_id)); tree.copy_global_to(guild=guild_object)
+                synced = await tree.sync(guild=guild_object); print(f"[SYNC] Guild specific commands synced instantly: {len(synced)}")
+            except Exception as e: print(f"[SYNC_ERROR] Guild tracking sync failed: {e}")
         else:
-            try:
-                await tree.sync()
-                print("[SYNC] Global application commands sent.")
-            except Exception as e:
-                print(f"[SYNC_ERROR] Global sync failed: {e}")
-
-        await send_to_log_channel(
-            tree.client, 
-            "🚀 Bot System Online", 
-            "**Mestro Tokens Dashboard** has successfully initialized.\nAll application slash commands are synced, and channel interaction loops are **Active**.",
-            color=discord.Color.gold()
-        )
+            try: await tree.sync(); print("[SYNC] Global application commands sent.")
+            except Exception as e: print(f"[SYNC_ERROR] Global sync failed: {e}")
+        await send_to_log_channel(tree.client, "🚀 Bot System Online", "**Mestro Tokens Dashboard** has successfully initialized.\nAll application slash commands are synced, and channel interaction loops are **Active**.", color=discord.Color.gold())
 
     @tree.command(name="donate_dashboard", description="Launch the customized Mestro Tokens donation menu panel")
     async def donate_dashboard(interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="🎁 Mestro Tokens Donation Center", 
-            description="Click the button panels below to support active system pool stock rotations!\n\n> To submit multiple tokens at once, click **Donate Multiple Tokens** and group your lines clearly using numbers like `token 1:`, `token 2:`, etc.", 
-            color=discord.Color.blue()
-        )
+        embed = discord.Embed(title="🎁 Mestro Tokens Donation Center", description="Click the button panels below to support active system pool stock rotations!\n\n> To submit multiple tokens at once, click **Donate Multiple Tokens** and group your lines clearly using numbers like `token 1:`, `token 2:`, etc.", color=discord.Color.blue())
         await interaction.response.send_message(embed=embed, view=MestroDonationDashboardView(tree.client))
 
     @tree.command(name="add", description="Force-add a fresh token to normal stock using only its refresh token")
     @app_commands.describe(refresh_token="Paste the raw cryptographic refresh token string here")
     async def add_token_command(interaction: discord.Interaction, refresh_token: str):
         await interaction.response.defer(ephemeral=True)
-        
         admin_env = os.getenv("ADMIN_USER_IDS", "")
         admin_list = [int(uid.strip()) for uid in admin_env.split(",") if uid.strip()]
-        
         if interaction.user.id not in admin_list:
-            await interaction.followup.send("❌ **Access Denied:** Only authorized administrators can manually supply entries.", ephemeral=True)
-            return
-
+            await interaction.followup.send("❌ **Access Denied:** Only authorized administrators can manually supply entries.", ephemeral=True); return
         clean_refresh = refresh_token.strip()
         if not clean_refresh or len(clean_refresh) < 10:
-            await interaction.followup.send("❌ **Error:** Invalid refresh token formatting.", ephemeral=True)
-            return
-
+            await interaction.followup.send("❌ **Error:** Invalid refresh token formatting.", ephemeral=True); return
         try:
-            filename = "normal_stock.json"
-            stock = []
+            filename = "normal_stock.json"; stock = []
             if os.path.exists(filename):
-                with open(filename, "r") as f:
-                    stock = json.load(f)
-            
-            stock.append({
-                "token": clean_refresh, 
-                "refresh_token": clean_refresh,
-                "_source_type": "admin_forced_upload"
-            })
-            with open(filename, "w") as f:
-                json.dump(stock, f, indent=2)
-                
+                with open(filename, "r") as f: stock = json.load(f)
+            stock.append({"token": clean_refresh, "refresh_token": clean_refresh, "_source_type": "admin_forced_upload"})
+            with open(filename, "w") as f: json.dump(stock, f, indent=2)
         except Exception as file_err:
-            await interaction.followup.send(f"❌ **Database Error:** Failed to commit token string: {file_err}", ephemeral=True)
-            return
-
+            await interaction.followup.send(f"❌ **Database Error:** Failed to commit token string: {file_err}", ephemeral=True); return
         await interaction.followup.send(f"🚀 **Success!** Refresh token has been appended directly into your active `normal_stock.json` pool. It will duplicate next minute!", ephemeral=True)
-        
-        await send_to_log_channel(
-            tree.client,
-            "⚡ Admin Supply Action",
-            f"**Administrator:** {interaction.user.mention} (`{interaction.user.id}`)\n**Action:** Forced custom token entry via `/add` command.\n**Target Pool:** Normal Stock Line Array (`normal_stock.json`)",
-            color=discord.Color.red()
-        )
+        await send_to_log_channel(tree.client, "⚡ Admin Supply Action", f"**Administrator:** {interaction.user.mention} (`{interaction.user.id}`)\n**Action:** Forced custom token entry via `/add` command.\n**Target Pool:** Normal Stock Line Array (`normal_stock.json`)", color=discord.Color.red())
 
-# ── MAIN INITIATOR EXECUTION LAYER ────────────────────────────────────────────
+    @tree.command(name="gen_key", description="[ADMIN] Generate a premium redeem key code string")
+    @app_commands.describe(uses="How many total members can claim this code", role="The premium role to grant upon claim")
+    async def gen_key_command(interaction: discord.Interaction, uses: int, role: discord.Role):
+        await interaction.response.defer(ephemeral=True)
+        if not await has_admin_access(interaction):
+            await interaction.followup.send("🚫 **Access Denied:** Admins only.", ephemeral=True); return
+        import random, string
+        rand_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6)); new_key = f"MESTRO-{rand_str}"
+        filename = "promo_keys.json"; keys = {}
+        if os.path.exists(filename):
+            try:
+                with open(filename, "r") as f: keys = json.load(f)
+            except Exception: pass
+        keys[new_key] = {"uses": uses, "role_id": role.id, "claimed_by": []}
+        with open(filename, "w") as f: json.dump(keys, f, indent=2)
+        await interaction.followup.send(f"🔑 **Key Generated successfully!**\nCode: `{new_key}`\nMax Uses: `{uses}`\nGrants Role: {role.mention}\n\n*Copy this string code and share it with your community!*", ephemeral=True)
+
+    @tree.command(name="redeem", description="Claim a custom key code to unlock premium hub role access")
+    @app_commands.describe(key="Paste your active premium code string here")
+    async def redeem_command(interaction: discord.Interaction, key: str):
+        await interaction.response.defer(ephemeral=True); from storage import redeem_promo_key
+        result = redeem_promo_key(key, interaction.user.id)
+        if result["status"] == "error":
+            await interaction.followup.send(result["msg"], ephemeral=True); return
+        member = await resolve_member(interaction); role = interaction.guild.get_role(int(result["role_id"]))
+        if not member or not role:
+            await interaction.followup.send("❌ **System Error:** Could not assign role parameters. Verify bot role ordering permissions.", ephemeral=True); return
+        try: await member.add_roles(role)
+        except Exception as err:
+            await interaction.followup.send(f"❌ **Permissions Error:** Failed to assign role: {err}", ephemeral=True); return
+        await interaction.followup.send(f"🎉 **Congratulations!** Key `{key.upper()}` claimed successfully! You have been granted the **{role.name}** access role status!", ephemeral=True)
+        await send_to_log_channel(tree.client, "🔑 Key Code Redeemed", f"**Member:** {interaction.user.mention} (`{interaction.user.id}`)\n**Code Claimed:** `{key.upper()}`\n**Granted Privilege Role:** {role.mention}\n**Uses Remaining:** `{result['remaining']}`", color=discord.Color.teal())
+
 if __name__ == "__main__":
     setup_donation_dashboard(tree)
     print("[BOT] Launching connection gateway layers...")
