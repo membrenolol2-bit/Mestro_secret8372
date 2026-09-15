@@ -62,10 +62,11 @@ from storage import (
     get_env_accounts,
     redeem_promo_key,
     check_blacklist_status,
-    modify_blacklist_entry
+    modify_blacklist_entry,
     log_name_change_submission,
     execute_nakama_name_update
 )
+
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN") or os.getenv("DISCORD_USER_TOKEN")
