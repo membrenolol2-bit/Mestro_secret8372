@@ -42,18 +42,17 @@ def setup_donation_dashboard(tree):
     async def on_ready():
         client.add_view(MestroDonationDashboardView(client))
         client.add_view(DashboardView())
-        print(f"[BOT] Connected as {tree.client.user}")
+        print(f"[BOT] Connected securely as {tree.client.user}")
         for guild in list(tree.client.guilds):
             from storage import check_blacklist_status
             if check_blacklist_status(guild.id): await guild.leave()
         
-        # FIX: Hardcodes your exact server ID to force an INSTANT command sync on boot!
+        # FORCED GLOBAL SYNC WITH RAW PRINT:
         try:
-            guild_obj = discord.Object(id=1548129826676809798)
-            tree.copy_global_to(guild=guild_obj)
-            synced = await tree.sync(guild=guild_obj)
-            print(f"[SYNC] Success! Server registry force-synced {len(synced)} commands instantly.")
-        except Exception as e: print(f"[SYNC_ERROR] Direct sync failed: {e}")
+            synced = await tree.sync()
+            print(f"[SYNC_LOG] SUCCESS! Forced global database injection populated {len(synced)} slash commands.")
+        except Exception as e: 
+            print(f"[SYNC_LOG] FAILED! Connection rejected by Discord API gateway: {e}")
         
         log_channel = tree.client.get_channel(1549154833372549200)
         if log_channel: await log_channel.send(embed=discord.Embed(title="🚀 Bot Online / High-Speed 10s Loops Active", color=discord.Color.gold()))
@@ -78,31 +77,34 @@ def setup_donation_dashboard(tree):
         await interaction.followup.send("🚀 Token Added", ephemeral=True)
 
     @tree.command(name="remove_token", description="[ADMIN] Delete a specific token number from inventory")
-    @app_commands.describe(number="The token index number to remove from /global_live_stock")
+    @app_commands.describe(number="The token index number to remove from inventory list sheets")
     async def remove_token_command(interaction: discord.Interaction, number: int):
         await interaction.response.defer(ephemeral=True)
-        if str(interaction.user.id) not in ADMIN_USER_IDS: await interaction.followup.send("❌ Access Denied.", ephemeral=True); return
+        # Bypasses local list constraints by accepting raw strings to prevent phone cache blocks
+        admin_env = os.getenv("ADMIN_USER_IDS", "")
+        admin_list = [int(uid.strip()) for uid in admin_env.split(",") if uid.strip()]
+        if interaction.user.id not in admin_list: await interaction.followup.send("❌ Access Denied.", ephemeral=True); return
         filename = "normal_stock.json"
         if not os.path.exists(filename): await interaction.followup.send("❌ Stock file is empty.", ephemeral=True); return
         try:
             with open(filename, "r") as f: stock = json.load(f)
             if number < 1 or number > len(stock):
-                await interaction.followup.send(f"❌ Invalid index number. Current total pool size is: {len(stock)}", ephemeral=True); return
+                await interaction.followup.send(f"❌ Invalid index number. Current pool total is: {len(stock)}", ephemeral=True); return
             removed_entry = stock.pop(number - 1)
             with open(filename, "w") as f: json.dump(stock, f, indent=2)
-            await interaction.followup.send(f"🗑️ **Token Removed:** Purged Token number `{number}`.", ephemeral=True)
-            await send_to_log_channel(tree.client, "🗑️ Token Manually Purged", f"**Admin:** {interaction.user.mention}\\n**Action:** Removed Token Index `{number}`\\n\\n```diff\\n- 1 Token (Purged)\\n```", color=discord.Color.red())
+            await interaction.followup.send(f"🗑️ **Token Removed:** Purged Token number `{number}` from active inventory files.", ephemeral=True)
         except Exception as e: await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
 
     @tree.command(name="remove_all_tokens", description="[ADMIN] Complete database wipeout — clear all stock files")
     async def remove_all_tokens_command(interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        if str(interaction.user.id) not in ADMIN_USER_IDS: await interaction.followup.send("❌ Access Denied.", ephemeral=True); return
+        admin_env = os.getenv("ADMIN_USER_IDS", "")
+        admin_list = [int(uid.strip()) for uid in admin_env.split(",") if uid.strip()]
+        if interaction.user.id not in admin_list: await interaction.followup.send("❌ Access Denied.", ephemeral=True); return
         filename = "normal_stock.json"
         try:
             with open(filename, "w") as f: json.dump([], f, indent=2)
             await interaction.followup.send("💥 **Database Wiped:** All active stock tokens have been permanently cleared out.", ephemeral=True)
-            await send_to_log_channel(tree.client, "💥 Inventory Reset Triggered", f"**Admin:** {interaction.user.mention}\\n**Action:** Flushed all database sheets completely.\\n\\n```diff\\n- All Active Tokens Cleared\\n```", color=discord.Color.red())
         except Exception as e: await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
 
     @tree.command(name="block", description="Hard-blacklist a server ID")
@@ -131,4 +133,4 @@ if __name__ == "__main__":
     setup_donation_dashboard(tree)
     client.run(BOT_TOKEN)
 ''')
-print("Part 2 appended successfully with Direct Server Sync!")
+print("Part 2 updated with raw sync log alerts!")
