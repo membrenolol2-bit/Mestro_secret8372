@@ -2,28 +2,41 @@ import os
 import json
 import asyncio
 import aiohttp
+import base64
 from datetime import datetime, timezone
 
 def safe_seconds_until_expiry(token_str):
-    """FORCED 1-MINUTE ENGINE: Completely ignores raw crypto errors and enforces your exact 60-second limit."""
+    """FORCED 1-MINUTE ENGINE: Enforces your strict 60-second limit."""
     return 60
 
 async def execute_nakama_refresh(token, refresh_token):
-    """Sends a high-speed POST payload to the Nakama server to rotate credentials entirely."""
-    primary_host = os.getenv("NAKAMA_HOST", "https://animalcompany.us-east1.nakamacloud.io")
-    headers = {"Content-Type": "application/json"}
+    """Sends a high-speed POST payload to the Nakama server with Basic Auth headers."""
+    primary_host = os.getenv("NAKAMA_HOST", "https://nakamacloud.io")
+    url = f"{primary_host.rstrip('/')}/v2/account/session/refresh"
+    
+    # 🔐 SECURE AUTHENTICATION LAYER: Bundles your Nakama Server Key into HTTP Basic Auth
+    server_key = "6URuTSlDKKfYbuDW:"
+    encoded_key = base64.b64encode(server_key.encode("utf-8")).decode("utf-8")
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {encoded_key}"
+    }
+    
     payload = {
         "token": token,
         "refresh_token": refresh_token if refresh_token else token
     }
-    url = f"{primary_host.rstrip('/')}/v2/account/session/refresh"
+    
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=payload, timeout=8) as response:
                 if response.status == 200:
                     return await response.json()
-    except Exception:
-        pass
+                else:
+                    print(f"[API_ERROR] Nakama rejected request with HTTP status: {response.status}")
+    except Exception as e:
+        print(f"[NETWORK_ERROR] Failed connecting to Nakama gateway: {e}")
     return None
 
 def run_stock_auto_refresh():
@@ -43,11 +56,10 @@ def run_stock_auto_refresh():
             refresh_token = entry.get("refresh_token", raw_token).strip()
             if not raw_token: continue
 
-            # Executes the high-speed Nakama rotation request
+            # Executes the authenticated rotation request
             new_data = loop.run_until_complete(execute_nakama_refresh(raw_token, refresh_token))
             
             if new_data and "token" in new_data:
-                # OVERWRITES OLD DATA: Puts a completely new working token string into the database
                 entry["token"] = new_data["token"]
                 entry["refresh_token"] = new_data["refresh_token"]
                 entry["input_data"] = new_data["token"]
@@ -55,7 +67,7 @@ def run_stock_auto_refresh():
                 has_changed = True
                 updated_stock.append(entry)
             else:
-                # AUTOMATIC PURGE SWEEP: Drops the token entirely if it becomes un-refreshable or dead
+                # AUTOMATIC PURGE SWEEP: Drops the token entirely if it becomes un-refreshable
                 has_changed = True
                 continue
 
