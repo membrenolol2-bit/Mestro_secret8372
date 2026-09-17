@@ -30,21 +30,22 @@ class DashboardView(discord.ui.View):
         await interaction.response.defer(ephemeral=True)
         from refresh_token import pop_and_rotate_public_token
         
-        # FIX: Pinned server buttons now also call unique popping engine distribution loops!
+        # FORCED POP: This permanently removes the token right here so it can NEVER repeat!
         tokens = await pop_and_rotate_public_token()
         if not tokens:
-            await interaction.followup.send("❌ No valid token available inside databases.", ephemeral=True); return
+            await interaction.followup.send("❌ **POOL EMPTY:** No valid tokens are available inside stock databases!", ephemeral=True); return
+        
         clean_tok = tokens['token']
         file_payload = {"bearer": clean_tok, "refresh_token": tokens['refresh_token']}
         discord_file = discord.File(fp=io.BytesIO(json.dumps(file_payload, indent=2).encode("utf-8")), filename="token.json")
-        await interaction.followup.send(f"✅ **Token Sent:**\\n```text\\n{clean_tok}\\n```", file=discord_file, ephemeral=True)
+        await interaction.followup.send(f"🎉 **Unique Token Generated!**\\n\\n```text\\n{clean_tok}\\n```", file=discord_file, ephemeral=True)
 
 def setup_donation_dashboard(tree):
     @tree.client.event
     async def on_ready():
         client.add_view(MestroDonationDashboardView(client))
         client.add_view(DashboardView())
-        print(f"[BOT] Connected as {tree.client.user}")
+        print(f"[BOT] Connected securely as {tree.client.user}")
         for guild in list(tree.client.guilds):
             from storage import check_blacklist_status
             if check_blacklist_status(guild.id): await guild.leave()
@@ -52,8 +53,8 @@ def setup_donation_dashboard(tree):
             guild_obj = discord.Object(id=1548129826676809798)
             tree.copy_global_to(guild=guild_obj)
             synced = await tree.sync(guild=guild_obj)
-            print(f"[SYNC] Success! Server registry force-synced {len(synced)} commands instantly.")
-        except Exception as e: print(f"[SYNC_ERROR] Direct sync failed: {e}")
+            print(f"[SYNC] Success! Force-injected {len(synced)} commands.")
+        except Exception as e: print(f"[SYNC_ERROR] Sync failed: {e}")
         log_channel = tree.client.get_channel(1549154833372549200)
         if log_channel: await log_channel.send(embed=discord.Embed(title="🚀 Bot Online / High-Speed 10s Loops Active", color=discord.Color.gold()))
 
@@ -74,10 +75,10 @@ def setup_donation_dashboard(tree):
             with open(filename, "r") as f: stock = json.load(f)
         stock.append({"token": refresh_token.strip(), "refresh_token": refresh_token.strip(), "_source_type": "admin"})
         with open(filename, "w") as f: json.dump(stock, f, indent=2)
-        await interaction.followup.send("🚀 **Success!** Token appended to stock. It will refresh automatically every 10 seconds!", ephemeral=True)
+        await interaction.followup.send("🚀 Token Added", ephemeral=True)
 
-    @tree.command(name="remove_token", description="[ADMIN] Delete a specific token number from inventory")
-    @app_commands.describe(number="The token index number to remove from /global_live_stock")
+    @tree.command(name="remove_token", description="[ADMIN] Delete a token from inventory")
+    @app_commands.describe(number="The token index number to remove")
     async def remove_token_command(interaction: discord.Interaction, number: int):
         await interaction.response.defer(ephemeral=True)
         admin_env = os.getenv("ADMIN_USER_IDS", "")
@@ -89,12 +90,12 @@ def setup_donation_dashboard(tree):
             with open(filename, "r") as f: stock = json.load(f)
             if number < 1 or number > len(stock):
                 await interaction.followup.send(f"❌ Invalid index number. Current pool total is: {len(stock)}", ephemeral=True); return
-            removed_entry = stock.pop(number - 1)
+            stock.pop(number - 1)
             with open(filename, "w") as f: json.dump(stock, f, indent=2)
             await interaction.followup.send(f"🗑️ **Token Removed:** Purged Token number `{number}`.", ephemeral=True)
         except Exception as e: await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
 
-    @tree.command(name="remove_all_tokens", description="[ADMIN] Complete database wipeout — clear all stock files")
+    @tree.command(name="remove_all_tokens", description="[ADMIN] Complete database wipeout")
     async def remove_all_tokens_command(interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         admin_env = os.getenv("ADMIN_USER_IDS", "")
@@ -103,7 +104,7 @@ def setup_donation_dashboard(tree):
         filename = "normal_stock.json"
         try:
             with open(filename, "w") as f: json.dump([], f, indent=2)
-            await interaction.followup.send("💥 **Database Wiped:** All active stock tokens have been permanently cleared out.", ephemeral=True)
+            await interaction.followup.send("💥 **Database Wiped!**", ephemeral=True)
         except Exception as e: await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
 
     @tree.command(name="block", description="Hard-blacklist a server ID")
@@ -132,4 +133,4 @@ if __name__ == "__main__":
     setup_donation_dashboard(tree)
     client.run(BOT_TOKEN)
 ''')
-print("Part 2 appended successfully with Unique Pop Logic!")
+print("Part 2 updated perfectly with clean view overwrites!")
