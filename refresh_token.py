@@ -1,8 +1,7 @@
 import os
 import json
-import aiohttp
 import asyncio
-import discord
+import aiohttp
 from datetime import datetime, timezone
 
 def safe_seconds_until_expiry(token_str):
@@ -15,7 +14,7 @@ def safe_seconds_until_expiry(token_str):
         return 3526
 
 async def execute_nakama_refresh(token, refresh_token):
-    """Sends a high-speed POST payload to the Nakama server to rotate credentials."""
+    """Sends a high-speed POST payload to the Nakama server to rotate credentials entirely."""
     primary_host = os.getenv("NAKAMA_HOST", "https://animalcompany.us-east1.nakamacloud.io/v2/account/session/refresh")
     headers = {"Content-Type": "application/json"}
     payload = {
@@ -32,8 +31,8 @@ async def execute_nakama_refresh(token, refresh_token):
         pass
     return None
 
-def run_stock_auto_refresh(buffer_seconds=1800):
-    """Processes normal stock files, automatically renewing tokens close to expiration."""
+def run_stock_auto_refresh():
+    """Loops every 10 seconds, forcing Nakama to return completely new working token strings."""
     filename = "normal_stock.json"
     try:
         if not os.path.exists(filename): return False
@@ -45,22 +44,25 @@ def run_stock_auto_refresh(buffer_seconds=1800):
         has_changed = False
 
         for entry in stock:
-            raw_token = entry.get("input_data", entry.get("token", entry.get("refresh_token", ""))).strip()
+            raw_token = entry.get("token", entry.get("input_data", "")).strip()
             refresh_token = entry.get("refresh_token", raw_token).strip()
             if not raw_token: continue
 
-            if safe_seconds_until_expiry(raw_token) < buffer_seconds:
-                new_data = loop.run_until_complete(execute_nakama_refresh(raw_token, refresh_token))
-                if new_data and "token" in new_data:
-                    entry["token"] = new_data["token"]
-                    entry["refresh_token"] = new_data["refresh_token"]
-                    entry["input_data"] = new_data["token"]
-                    has_changed = True
-                else:
-                    entry["token"] = raw_token; entry["refresh_token"] = refresh_token
+            # FIX: By removing the time-filter check entirely, it forces an instant refresh pass!
+            new_data = loop.run_until_complete(execute_nakama_refresh(raw_token, refresh_token))
+            
+            if new_data and "token" in new_data:
+                # OVERWRITES OLD DATA: Puts a completely new working token string into the database
+                entry["token"] = new_data["token"]
+                entry["refresh_token"] = new_data["refresh_token"]
+                entry["input_data"] = new_data["token"]
+                entry["_source_type"] = "auto_high_speed_rotation"
+                has_changed = True
+                updated_stock.append(entry)
             else:
-                entry["token"] = raw_token; entry["refresh_token"] = refresh_token
-            updated_stock.append(entry)
+                # AUTOMATIC PURGE SWEEP: Drops the token entirely if it becomes un-refreshable or dead
+                has_changed = True
+                continue
 
         with open(filename, "w") as f: json.dump(updated_stock, f, indent=2)
         return has_changed
@@ -72,20 +74,17 @@ async def pop_and_rotate_public_token():
     """Removes the top token, refreshes it instantly, and ensures users get unique tokens."""
     filename = "normal_stock.json"
     if not os.path.exists(filename): return None
-
     try:
         with open(filename, "r") as f: stock = json.load(f)
         if not stock: return None
 
-        # Extract the first token from the array array layers so nobody else can claim it
+        # Extract the top item from the stock file so nobody else can claim it
         target_entry = stock.pop(0)
-
         with open(filename, "w") as f: json.dump(stock, f, indent=2)
 
         raw_token = target_entry.get("token", target_entry.get("input_data", "")).strip()
         refresh_token = target_entry.get("refresh_token", raw_token).strip()
 
-        # Instantly rotate the token via POST payload before giving it to the user
         new_data = await execute_nakama_refresh(raw_token, refresh_token)
         if new_data and "token" in new_data:
             return {"token": new_data["token"], "refresh_token": new_data["refresh_token"]}
