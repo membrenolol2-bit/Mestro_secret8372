@@ -74,7 +74,7 @@ def setup_donation_dashboard(tree):
             with open(filename, "r") as f: stock = json.load(f)
         stock.append({"token": refresh_token.strip(), "refresh_token": refresh_token.strip(), "_source_type": "admin"})
         with open(filename, "w") as f: json.dump(stock, f, indent=2)
-        await interaction.followup.send("🚀 Token Added", ephemeral=True)
+        await interaction.followup.send("🚀 **Success!** Token appended to stock. It will refresh automatically every 10 seconds!", ephemeral=True)
 
     @tree.command(name="remove_token", description="[ADMIN] Delete a specific token number from inventory")
     @app_commands.describe(number="The token index number to remove from /global_live_stock")
