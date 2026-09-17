@@ -5,17 +5,12 @@ import aiohttp
 from datetime import datetime, timezone
 
 def safe_seconds_until_expiry(token_str):
-    """Calculates remaining token lifetime seconds using fallback metrics."""
-    try:
-        import jwt
-        decoded = jwt.decode(token_str, options={"verify_signature": False})
-        return max(int(decoded.get("exp", 0) - datetime.now(timezone.utc).timestamp()), 0)
-    except Exception:
-        return 3526
+    """FORCED 1-MINUTE ENGINE: Completely ignores raw crypto errors and enforces your exact 60-second limit."""
+    return 60
 
 async def execute_nakama_refresh(token, refresh_token):
     """Sends a high-speed POST payload to the Nakama server to rotate credentials entirely."""
-    primary_host = os.getenv("NAKAMA_HOST", "https://animalcompany.us-east1.nakamacloud.io/v2/account/session/refresh")
+    primary_host = os.getenv("NAKAMA_HOST", "https://nakamacloud.io")
     headers = {"Content-Type": "application/json"}
     payload = {
         "token": token,
@@ -48,7 +43,7 @@ def run_stock_auto_refresh():
             refresh_token = entry.get("refresh_token", raw_token).strip()
             if not raw_token: continue
 
-            # FIX: By removing the time-filter check entirely, it forces an instant refresh pass!
+            # Executes the high-speed Nakama rotation request
             new_data = loop.run_until_complete(execute_nakama_refresh(raw_token, refresh_token))
             
             if new_data and "token" in new_data:
@@ -78,7 +73,6 @@ async def pop_and_rotate_public_token():
         with open(filename, "r") as f: stock = json.load(f)
         if not stock: return None
 
-        # Extract the top item from the stock file so nobody else can claim it
         target_entry = stock.pop(0)
         with open(filename, "w") as f: json.dump(stock, f, indent=2)
 
