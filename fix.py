@@ -30,19 +30,19 @@ tree = app_commands.CommandTree(client)
 async def token_cmd(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     from refresh_token import pop_and_rotate_public_token
+    
+    # FIX: Explicitly pops the token from stock so nobody else ever gets it again!
     rotated = await pop_and_rotate_public_token()
     if not rotated:
-        await interaction.followup.send("❌ Pool empty!", ephemeral=True); return
+        await interaction.followup.send("❌ **POOL EMPTY:** No tokens available inside stock files! Support rotations by clicking Donate!", ephemeral=True); return
     
     clean_tok = rotated['token']
     clean_ref = rotated['refresh_token']
     
-    # Matches your exact required JSON file structure layout!
     file_payload = {"bearer": clean_tok, "refresh_token": clean_ref}
     json_bytes = json.dumps(file_payload, indent=2).encode("utf-8")
     discord_file = discord.File(fp=io.BytesIO(json_bytes), filename="token.json")
     
-    # Sends both the normal token string in chat AND attaches the JSON document!
     await interaction.followup.send(f"🎉 **Unique Token Generated Successfully!**\\n\\n```text\\n{clean_tok}\\n```", file=discord_file, ephemeral=True)
     
     diff_text = "```diff\\nFixed:\\n+ tokens\\nAdded:\\n- None\\nRemoved:\\n- 1 Token (Claimed)\\n```"
@@ -58,4 +58,4 @@ async def send_to_log_channel(client, title, description, color=discord.Color.bl
             else: await ch.send(embed=embed)
     except Exception as e: print(f"Log Error: {e}")
 ''')
-print("Part 1 written successfully!")
+print("Part 1 written successfully with Pop and Rotate Engine!")
