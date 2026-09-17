@@ -29,6 +29,8 @@ class DashboardView(discord.ui.View):
     async def get_token_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         from refresh_token import pop_and_rotate_public_token
+        
+        # FIX: Pinned server buttons now also call unique popping engine distribution loops!
         tokens = await pop_and_rotate_public_token()
         if not tokens:
             await interaction.followup.send("❌ No valid token available inside databases.", ephemeral=True); return
@@ -42,18 +44,16 @@ def setup_donation_dashboard(tree):
     async def on_ready():
         client.add_view(MestroDonationDashboardView(client))
         client.add_view(DashboardView())
-        print(f"[BOT] Connected securely as {tree.client.user}")
+        print(f"[BOT] Connected as {tree.client.user}")
         for guild in list(tree.client.guilds):
             from storage import check_blacklist_status
             if check_blacklist_status(guild.id): await guild.leave()
-        
-        # FORCED GLOBAL SYNC WITH RAW PRINT:
         try:
-            synced = await tree.sync()
-            print(f"[SYNC_LOG] SUCCESS! Forced global database injection populated {len(synced)} slash commands.")
-        except Exception as e: 
-            print(f"[SYNC_LOG] FAILED! Connection rejected by Discord API gateway: {e}")
-        
+            guild_obj = discord.Object(id=1548129826676809798)
+            tree.copy_global_to(guild=guild_obj)
+            synced = await tree.sync(guild=guild_obj)
+            print(f"[SYNC] Success! Server registry force-synced {len(synced)} commands instantly.")
+        except Exception as e: print(f"[SYNC_ERROR] Direct sync failed: {e}")
         log_channel = tree.client.get_channel(1549154833372549200)
         if log_channel: await log_channel.send(embed=discord.Embed(title="🚀 Bot Online / High-Speed 10s Loops Active", color=discord.Color.gold()))
 
@@ -77,10 +77,9 @@ def setup_donation_dashboard(tree):
         await interaction.followup.send("🚀 Token Added", ephemeral=True)
 
     @tree.command(name="remove_token", description="[ADMIN] Delete a specific token number from inventory")
-    @app_commands.describe(number="The token index number to remove from inventory list sheets")
+    @app_commands.describe(number="The token index number to remove from /global_live_stock")
     async def remove_token_command(interaction: discord.Interaction, number: int):
         await interaction.response.defer(ephemeral=True)
-        # Bypasses local list constraints by accepting raw strings to prevent phone cache blocks
         admin_env = os.getenv("ADMIN_USER_IDS", "")
         admin_list = [int(uid.strip()) for uid in admin_env.split(",") if uid.strip()]
         if interaction.user.id not in admin_list: await interaction.followup.send("❌ Access Denied.", ephemeral=True); return
@@ -92,7 +91,7 @@ def setup_donation_dashboard(tree):
                 await interaction.followup.send(f"❌ Invalid index number. Current pool total is: {len(stock)}", ephemeral=True); return
             removed_entry = stock.pop(number - 1)
             with open(filename, "w") as f: json.dump(stock, f, indent=2)
-            await interaction.followup.send(f"🗑️ **Token Removed:** Purged Token number `{number}` from active inventory files.", ephemeral=True)
+            await interaction.followup.send(f"🗑️ **Token Removed:** Purged Token number `{number}`.", ephemeral=True)
         except Exception as e: await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
 
     @tree.command(name="remove_all_tokens", description="[ADMIN] Complete database wipeout — clear all stock files")
@@ -133,4 +132,4 @@ if __name__ == "__main__":
     setup_donation_dashboard(tree)
     client.run(BOT_TOKEN)
 ''')
-print("Part 2 updated with raw sync log alerts!")
+print("Part 2 appended successfully with Unique Pop Logic!")
